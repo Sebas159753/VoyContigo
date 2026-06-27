@@ -1,0 +1,73 @@
+name: voycontigo
+description: "MVP App para viajes compartidos planificados: Machachi ↔ Quito"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management & DI
+  flutter_riverpod: ^2.5.1
+  
+  # Navigation
+  go_router: ^13.2.0
+  
+  # UI & Styling
+  google_fonts: ^6.2.1
+  flutter_form_builder: ^9.2.1
+  
+  # Backend & Supabase
+  
+  # Local Storage (MVP basics)
+  shared_preferences: ^2.2.2
+  firebase_core: ^4.7.0
+  firebase_auth: ^6.4.0
+  google_sign_in: ^6.2.1
+  cloud_firestore: ^6.3.0
+  flutter_map: ^8.3.0
+  latlong2: ^0.9.1
+  http: ^1.6.0
+  geolocator: ^14.0.2
+  firebase_messaging: ^16.2.0
+  flutter_local_notifications: ^21.0.0
+  flutter_stripe: ^13.0.0
+  cloud_functions: ^6.3.2
+  flutter_dotenv: ^6.0.1
+  url_launcher: ^6.3.0
+  
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0
+  # Generators for riverpod (future use if migrating to riverpod_generator, for MVP keeping simple)
+  
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon/
+    - .env
+
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
+
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: "assets/icon/app_icon.png"
+  android: true
+  ios: true
+  android_12:
+    image: "assets/icon/app_icon.png"
+    icon_background_color: "#ffffff"

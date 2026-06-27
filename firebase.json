@@ -1,0 +1,32 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "voycontigo-1a327",
+          "appId": "1:171205810996:android:49acd09e9c55fc3a2ee361",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "voycontigo-1a327",
+          "configurations": {
+            "android": "1:171205810996:android:49acd09e9c55fc3a2ee361",
+            "ios": "1:171205810996:ios:ff4a0a5c42ca46222ee361",
+            "macos": "1:171205810996:ios:ff4a0a5c42ca46222ee361",
+            "web": "1:171205810996:web:b4857c8d019de5012ee361",
+            "windows": "1:171205810996:web:d439f479bf0053882ee361"
+          }
+        }
+      }
+    }
+  }
+}

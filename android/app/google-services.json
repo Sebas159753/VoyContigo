@@ -1,0 +1,62 @@
+{
+  "project_info": {
+    "project_number": "171205810996",
+    "project_id": "voycontigo-1a327",
+    "storage_bucket": "voycontigo-1a327.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:171205810996:android:49acd09e9c55fc3a2ee361",
+        "android_client_info": {
+          "package_name": "com.voycontigo.voycontigo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "171205810996-jsamgh1jfdbsfgfjm1kebm9hrbhbe6dn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.voycontigo.voycontigo",
+            "certificate_hash": "e7db7a624b0372110810f3bf9ef78fa8048289f6"
+          }
+        },
+        {
+          "client_id": "171205810996-t0q91bpf6vg5kevd40dbncl1qrc2lcep.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.voycontigo.voycontigo",
+            "certificate_hash": "c67ebeede2941256c6b1ce917896743e83631be1"
+          }
+        },
+        {
+          "client_id": "171205810996-m3kddhjah2s31vrpa33pd9qait9h8qgk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAqLGlv29s3ZZBv5_YtEOaH9kkB8zGXLP4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "171205810996-m3kddhjah2s31vrpa33pd9qait9h8qgk.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "171205810996-7hmkgts341pidv701u11rero7ovuice8.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.voycontigo.voycontigo"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
