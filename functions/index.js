@@ -1,9 +1,14 @@
 // API v1 explícita: desde firebase-functions v5+ el import raíz expone la v2.
 const functions = require("firebase-functions/v1");
-const admin = require("firebase-admin");
+// firebase-admin v14 es modular: db/messaging ya no existen.
+const { initializeApp } = require("firebase-admin/app");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getMessaging } = require("firebase-admin/messaging");
 const geofire = require("geofire-common");
 
-admin.initializeApp();
+initializeApp();
+const db = getFirestore();
+const messaging = getMessaging();
 
 exports.onTripCreated = functions.firestore
     .document("trips/{tripId}")
@@ -44,7 +49,7 @@ exports.onTripCreated = functions.firestore
       const promises = [];
 
       for (const b of bounds) {
-          const q = admin.firestore().collection("trips")
+          const q = db.collection("trips")
             .where("isOffer", "==", !isOffer)
             .where("status", "==", "PENDING")
             .where("origin", "==", newTrip.origin)
@@ -91,18 +96,18 @@ exports.onTripCreated = functions.firestore
         console.log(`Scalable Match found! New Trip: ${newTripId}, Matched Trip: ${matchedTripId}`);
         
         // 1. Create match document
-        await admin.firestore().collection("matches").add({
+        await db.collection("matches").add({
           offerTripId: isOffer ? newTripId : matchedTripId,
           demandTripId: isOffer ? matchedTripId : newTripId,
           offerUserId: isOffer ? newTrip.creatorUid : matchedTrip.creatorUid,
           demandUserId: isOffer ? matchedTrip.creatorUid : newTrip.creatorUid,
           status: "PENDING",
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
         });
 
         // 2. Send Push Notification to the matched user
         const targetUserId = matchedTrip.creatorUid;
-        const userDoc = await admin.firestore().collection("users").doc(targetUserId).get();
+        const userDoc = await db.collection("users").doc(targetUserId).get();
         const fcmToken = userDoc.exists ? userDoc.data().fcmToken : null;
 
         if (fcmToken) {
@@ -127,7 +132,7 @@ exports.onTripCreated = functions.firestore
           };
 
           try {
-            await admin.messaging().send(message);
+            await messaging.send(message);
             console.log("Notification sent successfully to", targetUserId);
           } catch (error) {
             console.error("Error sending notification:", error);
@@ -161,7 +166,7 @@ exports.onTripUpdated = functions.firestore
             // Un pasajero se unió a la oferta
             const newPassenger = afterPassengers[afterPassengers.length - 1];
             const creatorUid = afterData.creatorUid;
-            const userDoc = await admin.firestore().collection("users").doc(creatorUid).get();
+            const userDoc = await db.collection("users").doc(creatorUid).get();
             const fcmToken = userDoc.exists ? userDoc.data().fcmToken : null;
             
             if (fcmToken) {
@@ -180,7 +185,7 @@ exports.onTripUpdated = functions.firestore
                     }
                 };
                 try {
-                    await admin.messaging().send(message);
+                    await messaging.send(message);
                     console.log("Passenger joined notification sent to", creatorUid);
                 } catch (error) {
                     console.error("Error sending passenger joined notification:", error);
@@ -189,7 +194,7 @@ exports.onTripUpdated = functions.firestore
         } else if (afterPassengers.length < beforePassengers.length) {
             // Un pasajero canceló su reserva
             const creatorUid = afterData.creatorUid;
-            const userDoc = await admin.firestore().collection("users").doc(creatorUid).get();
+            const userDoc = await db.collection("users").doc(creatorUid).get();
             const fcmToken = userDoc.exists ? userDoc.data().fcmToken : null;
             
             if (fcmToken) {
@@ -208,7 +213,7 @@ exports.onTripUpdated = functions.firestore
                     }
                 };
                 try {
-                    await admin.messaging().send(message);
+                    await messaging.send(message);
                     console.log("Passenger cancelled notification sent to", creatorUid);
                 } catch (error) {
                     console.error("Error sending notification:", error);
@@ -218,7 +223,7 @@ exports.onTripUpdated = functions.firestore
 
         if (afterData.status === "ACCEPTED" && beforeData.status !== "ACCEPTED") {
             const creatorUid = afterData.creatorUid;
-            const userDoc = await admin.firestore().collection("users").doc(creatorUid).get();
+            const userDoc = await db.collection("users").doc(creatorUid).get();
             const fcmToken = userDoc.exists ? userDoc.data().fcmToken : null;
             
             if (fcmToken) {
@@ -239,7 +244,7 @@ exports.onTripUpdated = functions.firestore
                     }
                 };
                 try {
-                    await admin.messaging().send(message);
+                    await messaging.send(message);
                     console.log("Accepted notification sent to", creatorUid);
                 } catch (error) {
                     console.error("Error sending notification:", error);
@@ -255,7 +260,7 @@ exports.onTripUpdated = functions.firestore
             }
 
             for (const uid of uidsToNotify) {
-                const userDoc = await admin.firestore().collection("users").doc(uid).get();
+                const userDoc = await db.collection("users").doc(uid).get();
                 const fcmToken = userDoc.exists ? userDoc.data().fcmToken : null;
                 if (fcmToken) {
                     const message = {
@@ -273,7 +278,7 @@ exports.onTripUpdated = functions.firestore
                         }
                     };
                     try {
-                        await admin.messaging().send(message);
+                        await messaging.send(message);
                     } catch (e) {
                         console.error("Error sending en_route notification:", e);
                     }
@@ -291,7 +296,7 @@ exports.onTripUpdated = functions.firestore
             }
 
             for (const uid of uidsToNotify) {
-                const userDoc = await admin.firestore().collection("users").doc(uid).get();
+                const userDoc = await db.collection("users").doc(uid).get();
                 const fcmToken = userDoc.exists ? userDoc.data().fcmToken : null;
                 if (fcmToken) {
                     const message = {
@@ -309,7 +314,7 @@ exports.onTripUpdated = functions.firestore
                         }
                     };
                     try {
-                        await admin.messaging().send(message);
+                        await messaging.send(message);
                         console.log("Cancelled notification sent to", uid);
                     } catch (e) {
                         console.error("Error sending notification:", e);
@@ -317,8 +322,7 @@ exports.onTripUpdated = functions.firestore
                 }
             }
         } else if (afterData.status === "COMPLETED" && beforeData.status !== "COMPLETED") {
-            const db = admin.firestore();
-            const uidsToUpdate = [afterData.creatorUid];
+                        const uidsToUpdate = [afterData.creatorUid];
             // El conductor que aceptó una demanda también completa el viaje.
             if (afterData.acceptedByUid) {
                 uidsToUpdate.push(afterData.acceptedByUid);
@@ -334,7 +338,7 @@ exports.onTripUpdated = functions.firestore
                 if (!uid) continue;
                 const userRef = db.collection("users").doc(uid);
                 batch.update(userRef, {
-                    completedTrips: admin.firestore.FieldValue.increment(1)
+                    completedTrips: FieldValue.increment(1)
                 });
             }
             try {
@@ -352,7 +356,7 @@ exports.onTripUpdated = functions.firestore
                 etaUids.push(afterData.creatorUid);
             }
             for (const uid of [...new Set(etaUids)]) {
-                const userDoc = await admin.firestore().collection("users").doc(uid).get();
+                const userDoc = await db.collection("users").doc(uid).get();
                 const fcmToken = userDoc.exists ? userDoc.data().fcmToken : null;
                 
                 if (fcmToken) {
@@ -369,7 +373,7 @@ exports.onTripUpdated = functions.firestore
                         }
                     };
                     try {
-                        await admin.messaging().send(message);
+                        await messaging.send(message);
                         console.log("ETA notification sent to passenger", uid);
                     } catch (error) {
                         console.error("Error sending ETA notification:", error);
@@ -388,7 +392,7 @@ exports.onChatMessage = functions.firestore
         const tripId = context.params.tripId;
         
         // Fetch trip to know who is involved
-        const tripDoc = await admin.firestore().collection("trips").doc(tripId).get();
+        const tripDoc = await db.collection("trips").doc(tripId).get();
         if (!tripDoc.exists) return null;
         const trip = tripDoc.data();
         
@@ -405,7 +409,7 @@ exports.onChatMessage = functions.firestore
         
         for (const uid of uniqueParticipants) {
             if (!uid) continue;
-            const userDoc = await admin.firestore().collection("users").doc(uid).get();
+            const userDoc = await db.collection("users").doc(uid).get();
             if (!userDoc.exists) continue;
             
             const userData = userDoc.data();
@@ -430,7 +434,7 @@ exports.onChatMessage = functions.firestore
                 };
                 
                 try {
-                    await admin.messaging().send(payload);
+                    await messaging.send(payload);
                 } catch (e) {
                     console.error("Error sending chat notification:", e);
                 }
