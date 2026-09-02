@@ -46,3 +46,6 @@ app.*.map.json
 
 # Dependencias de Cloud Functions (se regeneran con npm install)
 functions/node_modules/
+
+# Archivos de bloqueo que dejan herramientas locales
+*.conf.lock
