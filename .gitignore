@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Dependencias de Cloud Functions (se regeneran con npm install)
+functions/node_modules/
