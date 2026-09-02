@@ -114,9 +114,9 @@ exports.onTripCreated = functions.firestore
                 ? `Un conductor saldrá cerca de tu origen a una hora similar a la tuya.` 
                 : `Alguien busca viajar cerca de tu ruta a una hora similar a tu oferta.`,
             },
+            // El cliente enruta type=match a la pantalla de Coincidencias.
             data: {
               type: "match",
-              matchId: newTripId,
             },
             android: {
               priority: "high",
@@ -346,8 +346,12 @@ exports.onTripUpdated = functions.firestore
         }
         
         if (etaJustTriggered) {
-            const passengerUids = afterData.passengerUids || [];
-            for (const uid of passengerUids) {
+            const etaUids = [...(afterData.passengerUids || [])];
+            // En viajes tipo demanda el pasajero es el creador.
+            if (!afterData.isOffer && afterData.creatorUid) {
+                etaUids.push(afterData.creatorUid);
+            }
+            for (const uid of [...new Set(etaUids)]) {
                 const userDoc = await admin.firestore().collection("users").doc(uid).get();
                 const fcmToken = userDoc.exists ? userDoc.data().fcmToken : null;
                 

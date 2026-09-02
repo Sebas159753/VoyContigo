@@ -12,6 +12,7 @@ import 'package:voycontigo/features/trips/presentation/widgets/dynamic_trip_card
 import 'package:voycontigo/features/trips/presentation/widgets/my_active_trips_section.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:voycontigo/core/utils/error_handler.dart';
+import 'package:voycontigo/core/services/notification_service.dart';
 
 class BoardScreen extends ConsumerStatefulWidget {
   const BoardScreen({super.key});
@@ -218,7 +219,15 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                           userName: appState.userName,
                         );
                       }
-                      
+
+                      // Recordatorio local 30 min antes también para quien
+                      // reserva o acepta (no solo para quien publica).
+                      await NotificationService().scheduleTripReminder(TripReminder(
+                        tripId: item.id,
+                        scheduleTime: item.scheduleTime,
+                        routeLabel: '${item.origin} ➔ ${item.destination}',
+                      ));
+
                       if (mounted) {
                         ErrorHandler.showSuccessSnackBar(context, '¡Transacción completada!');
                         context.push('/tracking/${item.id}');

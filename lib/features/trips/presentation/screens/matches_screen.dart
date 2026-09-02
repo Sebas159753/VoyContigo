@@ -7,6 +7,7 @@ import 'package:voycontigo/features/trips/presentation/providers/trip_provider.d
 import 'package:voycontigo/features/trips/domain/models/trip.dart';
 import 'package:voycontigo/features/trips/presentation/widgets/dynamic_trip_card.dart';
 import 'package:voycontigo/core/utils/error_handler.dart';
+import 'package:voycontigo/core/services/notification_service.dart';
 import 'package:voycontigo/features/trips/data/trip_repository.dart';
 
 class MatchesScreen extends ConsumerWidget {
@@ -245,6 +246,13 @@ class _MatchDetailBottomSheetState extends ConsumerState<_MatchDetailBottomSheet
         );
       }
       
+      // Recordatorio local 30 min antes también para quien acepta.
+      await NotificationService().scheduleTripReminder(TripReminder(
+        tripId: trip!.id,
+        scheduleTime: trip!.scheduleTime,
+        routeLabel: '${trip!.origin} ➔ ${trip!.destination}',
+      ));
+
       if (mounted) {
         ErrorHandler.showSuccessSnackBar(context, '¡Viaje Aceptado!');
         context.pop(); 

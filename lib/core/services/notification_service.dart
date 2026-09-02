@@ -158,6 +158,24 @@ class NotificationService {
       });
     }
 
+    // 4.5 Respetar la preferencia guardada ANTES de tocar el token: si el
+    // usuario silenció las notificaciones, el arranque no debe re-registrar
+    // su token FCM (el estado global aún no se ha cargado en este punto).
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        _notificationsEnabled =
+            (doc.data()?['notificationsEnabled'] ?? true) as bool;
+      }
+    } catch (_) {
+      // Sin conexión: se mantiene el valor por defecto y el listener del
+      // estado global lo corregirá al cargar.
+    }
+
     // 5. Update token in Firestore
     await updateToken();
 
@@ -324,6 +342,19 @@ class NotificationService {
     // Las recompensas abren el Club de Beneficios.
     if (data['type'] == 'reward') {
       GoRouter.of(context).go('/rewards');
+      return;
+    }
+
+    // Las coincidencias abren la pantalla de Coincidencias, donde se
+    // puede revisar y aceptar (no el viaje ajeno).
+    if (data['type'] == 'match') {
+      GoRouter.of(context).go('/matches');
+      return;
+    }
+
+    // El chat abre directamente la conversación del viaje.
+    if (data['type'] == 'chat_message' && data['tripId'] != null) {
+      GoRouter.of(context).push('/chat/${data['tripId']}');
       return;
     }
 
