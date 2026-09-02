@@ -8,6 +8,7 @@ import 'package:voycontigo/features/trips/domain/models/trip.dart';
 import 'package:go_router/go_router.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:voycontigo/core/utils/date_format.dart';
+import 'package:voycontigo/features/trips/presentation/widgets/stop_map_sheet.dart';
 
 class DynamicTripCard extends StatefulWidget {
   final TripBoardItem item;
@@ -309,14 +310,60 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: isCensored ? 3 : 0, sigmaY: isCensored ? 3 : 0),
-                      child: Text(isCensored ? item.origin.split(',').first : '${item.origin} - ${item.exactPickup}', style: AppTheme.bodyFont(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    // Punto de subida: tocar abre el lugar exacto señalado
+                    // por quien publicó (solo lectura).
+                    GestureDetector(
+                      onTap: (!isCensored && item.originLat != null && item.originLng != null)
+                          ? () => showStopMapSheet(
+                                context,
+                                title: item.exactPickup.isNotEmpty ? item.exactPickup : item.origin,
+                                subtitle: 'Punto de encuentro señalado en la publicación',
+                                lat: item.originLat!,
+                                lng: item.originLng!,
+                              )
+                          : null,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ImageFiltered(
+                              imageFilter: ImageFilter.blur(sigmaX: isCensored ? 3 : 0, sigmaY: isCensored ? 3 : 0),
+                              child: Text(isCensored ? item.origin.split(',').first : '${item.origin} - ${item.exactPickup}', style: AppTheme.bodyFont(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                          if (!isCensored && item.originLat != null && item.originLng != null)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 6),
+                              child: Icon(Icons.map_outlined, size: 16, color: AppTheme.purpleMedium),
+                            ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 10),
-                    ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: isCensored ? 3 : 0, sigmaY: isCensored ? 3 : 0),
-                      child: Text(isCensored ? item.destination.split(',').first : '${item.destination} - ${item.exactDropoff}', style: AppTheme.bodyFont(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    GestureDetector(
+                      onTap: (!isCensored && item.destLat != null && item.destLng != null)
+                          ? () => showStopMapSheet(
+                                context,
+                                title: item.exactDropoff.isNotEmpty ? item.exactDropoff : item.destination,
+                                subtitle: 'Punto de bajada señalado en la publicación',
+                                lat: item.destLat!,
+                                lng: item.destLng!,
+                              )
+                          : null,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ImageFiltered(
+                              imageFilter: ImageFilter.blur(sigmaX: isCensored ? 3 : 0, sigmaY: isCensored ? 3 : 0),
+                              child: Text(isCensored ? item.destination.split(',').first : '${item.destination} - ${item.exactDropoff}', style: AppTheme.bodyFont(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                          if (!isCensored && item.destLat != null && item.destLng != null)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 6),
+                              child: Icon(Icons.map_outlined, size: 16, color: AppTheme.purpleMedium),
+                            ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

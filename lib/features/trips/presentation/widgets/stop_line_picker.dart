@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:voycontigo/features/trips/domain/stops_catalog.dart';
+import 'package:voycontigo/features/trips/presentation/widgets/stop_map_sheet.dart';
 
 /// Selector de tramo sobre la línea del corredor, estilo diagrama de metro.
 ///
@@ -18,6 +17,12 @@ class StopLinePicker extends StatelessWidget {
   final String destinationLabel;
   final void Function(RouteStop? origin, RouteStop? destination) onChanged;
 
+  /// Solo perfil conductor (oferta): permite afinar el punto exacto de la
+  /// parada arrastrando el mapa desde el paradero elegido.
+  final bool allowExactAdjust;
+  final void Function(RouteStop stop, bool isOrigin, double lat, double lng)?
+      onExactPointSaved;
+
   const StopLinePicker({
     super.key,
     required this.stops,
@@ -26,6 +31,8 @@ class StopLinePicker extends StatelessWidget {
     required this.onChanged,
     this.originLabel = 'Subes',
     this.destinationLabel = 'Bajas',
+    this.allowExactAdjust = false,
+    this.onExactPointSaved,
   });
 
   int _indexOf(RouteStop? stop) =>
@@ -56,97 +63,27 @@ class StopLinePicker extends StatelessWidget {
     onChanged(origin, tapped);
   }
 
-  /// Vista previa del paradero en el mapa, para confirmar el punto físico.
+  /// Vista del paradero en el mapa. Si es un extremo elegido y el modo
+  /// conductor lo permite, se abre en modo ajustable para fijar el punto
+  /// exacto de la parada; si no, en modo solo lectura.
   void _showStopOnMap(BuildContext context, RouteStop stop) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppTheme.outline,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                stop.name,
-                style: AppTheme.titleFont(fontSize: 22, color: AppTheme.ink),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                stop.reference,
-                textAlign: TextAlign.center,
-                style: AppTheme.bodyFont(
-                    fontSize: 13, color: AppTheme.inkMuted),
-              ),
-              const SizedBox(height: 16),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: SizedBox(
-                  height: 320,
-                  width: double.infinity,
-                  child: FlutterMap(
-                    options: MapOptions(
-                      initialCenter: LatLng(stop.lat, stop.lng),
-                      initialZoom: 16.5,
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.voycontigo.voycontigo',
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: LatLng(stop.lat, stop.lng),
-                            width: 46,
-                            height: 46,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: AppTheme.purpleDarkest,
-                                shape: BoxShape.circle,
-                                border:
-                                    Border.all(color: Colors.white, width: 3),
-                                boxShadow: const [
-                                  BoxShadow(
-                                      color: Colors.black38, blurRadius: 6),
-                                ],
-                              ),
-                              child: const Icon(Icons.location_on,
-                                  color: Colors.white, size: 24),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Entendido'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final bool isEndpoint =
+        stop.id == origin?.id || stop.id == destination?.id;
+    final bool adjustable = allowExactAdjust && isEndpoint;
+
+    showStopMapSheet(
+      context,
+      title: stop.name,
+      subtitle: adjustable
+          ? '${stop.reference} · ajusta tu parada exacta'
+          : stop.reference,
+      lat: stop.lat,
+      lng: stop.lng,
+      adjustable: adjustable,
+      onSave: adjustable
+          ? (lat, lng) =>
+              onExactPointSaved?.call(stop, stop.id == origin?.id, lat, lng)
+          : null,
     );
   }
 

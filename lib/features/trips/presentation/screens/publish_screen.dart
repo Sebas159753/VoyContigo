@@ -1028,7 +1028,35 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
               originLabel: _isOffer ? 'Recoges' : 'Subes',
               destinationLabel: _isOffer ? 'Dejas' : 'Bajas',
               onChanged: _onStopsChanged,
+              // Solo el conductor fija el punto exacto de su parada; el
+              // pasajero lo verá en modo solo lectura.
+              allowExactAdjust: _isOffer,
+              onExactPointSaved: (stop, isOrigin, lat, lng) {
+                setState(() {
+                  if (isOrigin) {
+                    _originLat = lat;
+                    _originLng = lng;
+                  } else {
+                    _destLat = lat;
+                    _destLng = lng;
+                  }
+                });
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(
+                    content: Text(
+                        'Punto exacto guardado para ${stop.name} 📍'),
+                  ));
+              },
             ),
+            if (_isOffer && (_originStop != null || _destStop != null)) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Tip: toca el mapa de tu parada elegida para fijar el punto exacto por el que pasas.',
+                style: AppTheme.bodyFont(
+                    fontSize: 11, color: AppTheme.inkMuted),
+              ),
+            ],
             const SizedBox(height: 10),
 
             // Punto libre en el mapa (caso excepcional, no el flujo principal).
