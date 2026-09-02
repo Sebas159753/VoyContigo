@@ -73,6 +73,12 @@ class _MyTripCard extends StatelessWidget {
 
   bool get _isMine => trip.creatorUid == myUid;
 
+  /// Confirmado = ya hay contraparte (aceptado, lleno o en ruta).
+  bool get _isConfirmed =>
+      trip.status == 'ACCEPTED' ||
+      trip.status == 'FULL' ||
+      trip.status == 'EN_ROUTE';
+
   /// Etiqueta corta del rol del usuario en este viaje.
   String get _roleLabel {
     if (_isMine) return 'TU PUBLICACIÓN';
@@ -106,8 +112,10 @@ class _MyTripCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Verde = confirmado; morado = aún en espera. El estado manda sobre
+    // el rol para que el cambio salte a la vista.
     final Color accent =
-        _isMine ? AppTheme.purpleDark : AppTheme.successGreen;
+        _isConfirmed ? AppTheme.successGreen : AppTheme.purpleDark;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -139,11 +147,13 @@ class _MyTripCard extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  _isMine
-                      ? (trip.isOffer
-                          ? Icons.campaign_rounded
-                          : Icons.hail_rounded)
-                      : Icons.event_seat_rounded,
+                  _isConfirmed
+                      ? Icons.check_circle_rounded
+                      : (_isMine
+                          ? (trip.isOffer
+                              ? Icons.campaign_rounded
+                              : Icons.hail_rounded)
+                          : Icons.event_seat_rounded),
                   color: accent,
                   size: 22,
                 ),
@@ -175,13 +185,32 @@ class _MyTripCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${VoyDate.shortDateTime(trip.scheduleTime)} · $_statusText',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      VoyDate.shortDateTime(trip.scheduleTime),
                       style: AppTheme.bodyFont(
                         fontSize: 12,
                         color: AppTheme.inkMuted,
                         fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    // Estado en su propia línea: cabe el nombre completo
+                    // del conductor y el color dice si ya está confirmado.
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _statusText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTheme.bodyFont(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: accent,
+                        ),
                       ),
                     ),
                   ],

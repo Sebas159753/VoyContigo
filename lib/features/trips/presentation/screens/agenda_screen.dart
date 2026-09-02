@@ -581,7 +581,15 @@ class _AgendaTile extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: (_canTrack || isHistory) ? onOpen : null,
-            child: Padding(
+            child: Container(
+              // Franja lateral con el color del estado: se distingue de un
+              // vistazo qué está esperando, confirmado o cancelado.
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: _statusColor(item.status), width: 4),
+                ),
+              ),
+              child: Padding(
               padding: const EdgeInsets.all(14),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,6 +667,7 @@ class _AgendaTile extends StatelessWidget {
                   // Menú de acciones
                   if (!isHistory) _buildMenu(context),
                 ],
+              ),
               ),
             ),
           ),
@@ -738,48 +747,66 @@ class _RolePill extends StatelessWidget {
   }
 }
 
+/// Color semántico por estado del viaje (píldora + franja lateral).
+Color _statusColor(String status) {
+  switch (status) {
+    case 'ACCEPTED':
+    case 'COMPLETED':
+      return AppTheme.successGreen;
+    case 'EN_ROUTE':
+      return AppTheme.purpleDarkest;
+    case 'FULL':
+      return const Color(0xFFB26A00);
+    case 'CANCELLED':
+      return AppTheme.standardRed;
+    default:
+      return AppTheme.inkMuted; // PENDING: esperando
+  }
+}
+
 class _StatusPill extends StatelessWidget {
   final String status;
   const _StatusPill({required this.status});
 
   @override
   Widget build(BuildContext context) {
-    late Color color;
+    final color = _statusColor(status);
     late String text;
+    // Los estados "vivos" van en píldora sólida para saltar a la vista.
+    bool solid = true;
     switch (status) {
       case 'ACCEPTED':
-        color = AppTheme.purpleDark;
-        text = 'Aceptado';
+        text = 'Aceptado ✓';
         break;
       case 'EN_ROUTE':
-        color = AppTheme.purpleDarkest;
         text = 'En camino';
         break;
       case 'FULL':
-        color = const Color(0xFFB26A00);
         text = 'Lleno';
         break;
-      case 'COMPLETED':
-        color = AppTheme.successGreen;
-        text = 'Completado';
-        break;
       case 'CANCELLED':
-        color = AppTheme.standardRed;
         text = 'Cancelado';
         break;
+      case 'COMPLETED':
+        text = 'Completado';
+        solid = false;
+        break;
       default:
-        color = AppTheme.inkMuted;
-        text = 'Buscando';
+        text = 'Esperando';
+        solid = false;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: solid ? color : color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(text,
           style: AppTheme.subtitleFont(
-              fontSize: 10, fontWeight: FontWeight.w600, color: color, letterSpacing: 0.3)),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: solid ? Colors.white : color,
+              letterSpacing: 0.3)),
     );
   }
 }
