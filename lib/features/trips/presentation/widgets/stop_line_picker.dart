@@ -45,16 +45,13 @@ class StopLinePicker extends StatelessWidget {
       onChanged(origin, null); // quitar solo la bajada
       return;
     }
-    if (destination == null) {
-      if (tappedIdx > originIdx) {
-        onChanged(origin, tapped);
-      } else {
-        onChanged(tapped, null); // tocó antes del origen: nuevo origen
-      }
+    if (tappedIdx < originIdx) {
+      // Tocó antes de la subida: mueve la subida y conserva la bajada.
+      onChanged(tapped, destination);
       return;
     }
-    // Ya había tramo completo: reiniciar desde el nuevo paradero.
-    onChanged(tapped, null);
+    // Tocó después de la subida: fija (o mueve) la bajada.
+    onChanged(origin, tapped);
   }
 
   @override
