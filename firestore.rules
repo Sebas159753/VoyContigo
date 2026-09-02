@@ -24,8 +24,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       // Crear tu propio doc, sin auto-otorgarte premium/suscripción/rol.
+      // Se toleran isPremium/isSubscribed solo si vienen en false (los
+      // clientes existentes los escriben así al registrarse).
       allow create: if isSignedInAs(userId)
-        && !request.resource.data.keys().hasAny(['isPremium', 'isSubscribed', 'stripeSubscriptionId'])
+        && !('stripeSubscriptionId' in request.resource.data.keys())
+        && (!('isPremium' in request.resource.data.keys()) || request.resource.data.isPremium == false)
+        && (!('isSubscribed' in request.resource.data.keys()) || request.resource.data.isSubscribed == false)
         && (!('role' in request.resource.data.keys()) || request.resource.data.role == 'USER');
 
       // El dueño actualiza (sin tocar finanzas/rol) O cualquiera solo el rating.

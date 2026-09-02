@@ -149,8 +149,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           'rating': 5.0,
           'totalRatings': 1,
           'freeUses': 0,
-          'isPremium': false,
-          'isSubscribed': false,
+          // isPremium/isSubscribed no se escriben: las reglas los tratan
+          // como false cuando faltan y así no chocan con la validación.
           'lastResetMonth': currentYearMonth,
           'createdAt': FieldValue.serverTimestamp(),
           'completedTrips': 0,
@@ -262,8 +262,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             'rating': 5.0,
             'totalRatings': 1,
             'freeUses': 0,
-            'isPremium': false,
-            'isSubscribed': false,
+            // isPremium/isSubscribed no se escriben: las reglas los tratan
+            // como false cuando faltan y así no chocan con la validación.
             'isVerified': false,
             'lastResetMonth': currentYearMonth,
             'createdAt': FieldValue.serverTimestamp(),
