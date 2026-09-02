@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -10,11 +8,10 @@ import 'package:geolocator/geolocator.dart';
 import 'package:voycontigo/features/trips/domain/models/trip.dart';
 import 'package:voycontigo/features/trips/presentation/providers/trip_provider.dart';
 import 'package:voycontigo/features/trips/data/trip_repository.dart';
-import 'package:voycontigo/features/profile/presentation/widgets/freemium_banner.dart';
 import 'package:voycontigo/features/trips/presentation/widgets/dynamic_trip_card.dart';
+import 'package:voycontigo/features/trips/presentation/widgets/my_active_trips_section.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:voycontigo/core/utils/error_handler.dart';
-import 'package:voycontigo/core/config/app_config.dart';
 
 class BoardScreen extends ConsumerStatefulWidget {
   const BoardScreen({super.key});
@@ -88,14 +85,14 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
-        title: Text('Celular Requerido', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        title: Text('Celular Requerido', style: AppTheme.bodyFont(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Por motivos de seguridad y coordinación, los demás usuarios necesitan poder contactarte durante el viaje.',
-              style: GoogleFonts.inter(color: Colors.black54, fontSize: 14),
+              style: AppTheme.bodyFont(color: Colors.black54, fontSize: 14),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -139,6 +136,13 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
   void _confirmDeal(BuildContext context, TripBoardItem item, bool isOfferList) async {
     final isDriverAction = !isOfferList;
     final appState = ref.read(appStateProvider);
+
+    // Aceptar una demanda implica conducir: exige identidad validada,
+    // igual que para publicar una oferta.
+    if (isDriverAction && !appState.isVerified) {
+      _requireVehicleData(() {});
+      return;
+    }
 
     if (appState.emergencyPhone.isEmpty) {
       final newPhone = await _showPhoneRequiredDialog();
@@ -242,7 +246,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Identidad no validada'),
-          content: const Text('Para publicar como conductor, necesitas validar tu identidad por seguridad.'),
+          content: const Text('Para llevar pasajeros como conductor, necesitas validar tu identidad por seguridad.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -268,6 +272,8 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     final appState = ref.read(appStateProvider);
     var filtered = items.where((i) {
       if (i.isOffer != isOfferList || i.availableSeats <= 0) return false;
+      // No mostrar tus propias publicaciones (no puedes reservarte a ti mismo).
+      if (i.creatorUid == appState.uid) return false;
       if (i.acceptedByUid == appState.uid) return false;
       if (i.passengers.any((p) => p['uid'] == appState.uid)) return false;
       return true;
@@ -278,7 +284,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
     if (filtered.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(24.0),
-        child: Center(child: Text('No hay resultados en esta categoría.', style: GoogleFonts.inter(color: Colors.black45, fontSize: 14))),
+        child: Center(child: Text('No hay resultados en esta categoría.', style: AppTheme.bodyFont(color: Colors.black45, fontSize: 14))),
       );
     }
 
@@ -304,14 +310,22 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
   List<Marker> _buildMapMarkers(List<TripBoardItem> trips, String currentMode) {
     final pendingTrips = trips.where((t) => t.status == 'PENDING').toList();
     final isPassengerMode = currentMode == 'pasajero';
-    
-    final relevantTrips = pendingTrips.where((t) => t.isOffer == isPassengerMode).toList();
-    
+    final myUid = ref.read(appStateProvider).uid;
+
+    // Viajes de otros (del lado que te interesa) + tus propias publicaciones,
+    // que se pintan con un pin verde distintivo.
+    final relevantTrips = pendingTrips
+        .where((t) =>
+            (t.isOffer == isPassengerMode && t.creatorUid != myUid) ||
+            t.creatorUid == myUid)
+        .toList();
+
     return relevantTrips.map((trip) {
       if (trip.originLat == null || trip.originLng == null) return null;
-      
+
       final isSelected = trip.id == _selectedMarkerTripId;
-      
+      final isOwn = trip.creatorUid == myUid;
+
       return Marker(
         point: LatLng(trip.originLat!, trip.originLng!),
         width: isSelected ? 160 : 40,
@@ -333,13 +347,17 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
+                    color: isOwn
+                        ? AppTheme.successGreen
+                        : Theme.of(context).colorScheme.primary,
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2),
                     boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0,2))],
                   ),
                   child: Icon(
-                    isPassengerMode ? Icons.directions_car : Icons.person,
+                    isOwn
+                        ? Icons.star_rounded
+                        : (isPassengerMode ? Icons.directions_car : Icons.person),
                     color: Colors.white,
                     size: 20,
                   ),
@@ -361,15 +379,15 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          trip.userName,
-                          style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
+                          isOwn ? 'Tu publicación ⭐' : trip.userName,
+                          style: AppTheme.bodyFont(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           'A: ${trip.destination.split(',').first}',
-                          style: GoogleFonts.inter(fontSize: 11, color: Colors.black54),
+                          style: AppTheme.bodyFont(fontSize: 11, color: Colors.black54),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -377,7 +395,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                           const SizedBox(height: 2),
                           Text(
                             'Vía: ${trip.stops.join(', ')}',
-                            style: GoogleFonts.inter(fontSize: 9, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
+                            style: AppTheme.bodyFont(fontSize: 9, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -387,8 +405,8 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              '\$${trip.price?.toStringAsFixed(2)}',
-                              style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary, fontSize: 13),
+                              '\$${trip.price?.toStringAsFixed(2) ?? '0.00'}',
+                              style: AppTheme.bodyFont(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary, fontSize: 13),
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -397,7 +415,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                                 children: [
                                   Icon(trip.isOffer ? Icons.event_seat : Icons.person, size: 10, color: Colors.black54),
                                   const SizedBox(width: 2),
-                                  Text(trip.isOffer ? '${trip.availableSeats}' : '${trip.seats}', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold)),
+                                  Text(trip.isOffer ? '${trip.availableSeats}' : '${trip.seats}', style: AppTheme.bodyFont(fontSize: 10, fontWeight: FontWeight.bold)),
                                 ],
                               ),
                             )
@@ -424,12 +442,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
           context.push('/publish?type=demanda');
         } else {
           _requireVehicleData(() {
-            final canCreate = ref.read(appStateProvider.notifier).canTransact(isDriverAction: true);
-            if (!canCreate) {
-              context.push('/subscription');
-            } else {
-              context.push('/publish?type=oferta');
-            }
+            context.push('/publish?type=oferta');
           });
         }
       },
@@ -454,7 +467,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
             const SizedBox(width: 16),
             Text(
               title,
-              style: GoogleFonts.inter(
+              style: AppTheme.bodyFont(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
                 color: Colors.black87,
@@ -499,7 +512,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                       height: 24,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.blueAccent,
+                          color: AppTheme.purpleMedium,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 3),
                           boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
@@ -545,7 +558,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                           const SizedBox(width: 6),
                           Text(
                             currentMode == 'pasajero' ? 'Modo Pasajero' : 'Modo Conductor',
-                            style: GoogleFonts.inter(
+                            style: AppTheme.bodyFont(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
@@ -555,7 +568,6 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                       ),
                     ),
                   ),
-                  if (AppConfig.isMonetizationEnabled) const FreemiumBanner(),
                   _buildWhereToBlock(context, currentMode),
                 ],
               ),
@@ -613,6 +625,9 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Tus publicaciones y reservas, visibles en el
+                              // mismo tablero (la Agenda sigue teniendo el detalle).
+                              const MyActiveTripsSection(),
                               Container(
                                 margin: const EdgeInsets.fromLTRB(16, 24, 16, 12),
                                 padding: const EdgeInsets.all(16),
@@ -642,12 +657,12 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                                         children: [
                                           Text(
                                             currentMode == 'pasajero' ? 'Conductores Disponibles' : 'Pasajeros Buscando',
-                                            style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 18, color: Theme.of(context).colorScheme.primary, letterSpacing: -0.5),
+                                            style: AppTheme.bodyFont(fontWeight: FontWeight.w900, fontSize: 18, color: Theme.of(context).colorScheme.primary, letterSpacing: -0.5),
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
                                             'Revisa el mapa y la lista inferior antes de crear tu propia publicación.',
-                                            style: GoogleFonts.inter(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w500, height: 1.2),
+                                            style: AppTheme.bodyFont(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w500, height: 1.2),
                                           ),
                                         ],
                                       ),
