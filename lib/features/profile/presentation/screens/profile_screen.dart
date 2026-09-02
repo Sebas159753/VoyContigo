@@ -133,26 +133,31 @@ class ProfileScreen extends ConsumerWidget {
                     Text('¿Necesitas ayuda con un viaje o tu cuenta?', style: AppTheme.bodyFont(color: Colors.black54), textAlign: TextAlign.center),
                     const SizedBox(height: 24),
                     ListTile(
-                      leading: const Icon(Icons.email_outlined, color: Colors.black),
-                      title: Text('ayuda@voycontigo.app', style: AppTheme.bodyFont(color: Colors.black87, fontWeight: FontWeight.w600)),
-                      subtitle: Text('Escríbenos y te respondemos lo antes posible', style: AppTheme.bodyFont(color: Colors.black45, fontSize: 12)),
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF25D366), // verde WhatsApp
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.chat_rounded, color: Colors.white, size: 20),
+                      ),
+                      title: Text('Escríbenos por WhatsApp', style: AppTheme.bodyFont(color: Colors.black87, fontWeight: FontWeight.w600)),
+                      subtitle: Text('Te respondemos lo antes posible', style: AppTheme.bodyFont(color: Colors.black45, fontSize: 12)),
                       onTap: () async {
                         final messenger = ScaffoldMessenger.of(context);
                         context.pop();
-                        final mailUri = Uri(
-                          scheme: 'mailto',
-                          path: 'ayuda@voycontigo.app',
-                          query: 'subject=Soporte VoyContigo',
-                        );
+                        final whatsappUri = Uri.https('wa.me', '/593999284698', {
+                          'text': 'Hola, necesito ayuda con VoyContigo 👋',
+                        });
                         bool opened = false;
                         try {
-                          opened = await launchUrl(mailUri);
+                          opened = await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
                         } catch (_) {
                           opened = false;
                         }
                         if (!opened) {
                           messenger.showSnackBar(const SnackBar(
-                            content: Text('No se encontró una app de correo. Escríbenos a ayuda@voycontigo.app'),
+                            content: Text('No se pudo abrir WhatsApp. Escríbenos al +593 99 928 4698'),
                           ));
                         }
                       },
