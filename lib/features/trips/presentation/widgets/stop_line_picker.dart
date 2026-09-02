@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:voycontigo/features/trips/domain/stops_catalog.dart';
 
@@ -54,6 +56,100 @@ class StopLinePicker extends StatelessWidget {
     onChanged(origin, tapped);
   }
 
+  /// Vista previa del paradero en el mapa, para confirmar el punto físico.
+  void _showStopOnMap(BuildContext context, RouteStop stop) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.outline,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                stop.name,
+                style: AppTheme.titleFont(fontSize: 22, color: AppTheme.ink),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                stop.reference,
+                textAlign: TextAlign.center,
+                style: AppTheme.bodyFont(
+                    fontSize: 13, color: AppTheme.inkMuted),
+              ),
+              const SizedBox(height: 16),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: SizedBox(
+                  height: 320,
+                  width: double.infinity,
+                  child: FlutterMap(
+                    options: MapOptions(
+                      initialCenter: LatLng(stop.lat, stop.lng),
+                      initialZoom: 16.5,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.voycontigo.voycontigo',
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: LatLng(stop.lat, stop.lng),
+                            width: 46,
+                            height: 46,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppTheme.purpleDarkest,
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: Colors.white, width: 3),
+                                boxShadow: const [
+                                  BoxShadow(
+                                      color: Colors.black38, blurRadius: 6),
+                                ],
+                              ),
+                              child: const Icon(Icons.location_on,
+                                  color: Colors.white, size: 24),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Entendido'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final originIdx = _indexOf(origin);
@@ -86,6 +182,7 @@ class StopLinePicker extends StatelessWidget {
               originLabel: originLabel,
               destinationLabel: destinationLabel,
               onTap: () => _handleTap(stops[i]),
+              onViewMap: () => _showStopOnMap(context, stops[i]),
             ),
           ],
         ],
@@ -135,6 +232,7 @@ class _StopRow extends StatelessWidget {
   final String originLabel;
   final String destinationLabel;
   final VoidCallback onTap;
+  final VoidCallback onViewMap;
 
   const _StopRow({
     required this.stop,
@@ -146,6 +244,7 @@ class _StopRow extends StatelessWidget {
     required this.originLabel,
     required this.destinationLabel,
     required this.onTap,
+    required this.onViewMap,
   });
 
   bool get _isEndpoint => isOrigin || isDestination;
@@ -213,6 +312,13 @@ class _StopRow extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              onPressed: onViewMap,
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Ver en el mapa',
+              icon: const Icon(Icons.map_outlined,
+                  size: 20, color: AppTheme.purpleMedium),
             ),
             if (isOrigin || isDestination)
               Container(
