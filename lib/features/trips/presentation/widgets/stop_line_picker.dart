@@ -188,8 +188,10 @@ class _StopRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // La línea marca el tramo del viaje con un tono suave; los paraderos
+    // intermedios NO se pintan para no sugerir que el viaje para en ellos.
     final Color lineColor =
-        inSegment ? AppTheme.purpleDark : AppTheme.outline;
+        inSegment ? AppTheme.purpleMedium : AppTheme.outline;
 
     return InkWell(
       onTap: onTap,
@@ -211,7 +213,6 @@ class _StopRow extends StatelessWidget {
                   ),
                   _StopNode(
                     isEndpoint: _isEndpoint,
-                    inSegment: inSegment,
                     isOrigin: isOrigin,
                   ),
                   Expanded(
@@ -292,12 +293,10 @@ class _StopRow extends StatelessWidget {
 
 class _StopNode extends StatelessWidget {
   final bool isEndpoint;
-  final bool inSegment;
   final bool isOrigin;
 
   const _StopNode({
     required this.isEndpoint,
-    required this.inSegment,
     required this.isOrigin,
   });
 
@@ -320,16 +319,15 @@ class _StopNode extends StatelessWidget {
         ),
       );
     }
+    // Paradero intermedio: siempre con aspecto neutro, aunque quede dentro
+    // del tramo — el viaje no para ahí.
     return Container(
       width: 14,
       height: 14,
       decoration: BoxDecoration(
-        color: inSegment ? AppTheme.purpleDark : Colors.white,
+        color: Colors.white,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: inSegment ? AppTheme.purpleDark : AppTheme.inkMuted,
-          width: 2,
-        ),
+        border: Border.all(color: AppTheme.inkMuted, width: 2),
       ),
     );
   }
