@@ -52,7 +52,8 @@ service cloud.firestore {
         && request.resource.data.price >= 0
         && request.resource.data.status == 'PENDING'
         && request.resource.data.isOffer is bool
-        && request.resource.data.acceptedByUid == null;
+        && (!('acceptedByUid' in request.resource.data)
+            || request.resource.data.acceptedByUid == null);
 
       allow update: if isAuthenticated() && (
         // (a) El creador edita su propio viaje, sin cambiar de dueño.

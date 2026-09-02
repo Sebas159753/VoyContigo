@@ -2,34 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:voycontigo/features/trips/presentation/providers/trip_provider.dart';
 import 'package:voycontigo/features/trips/data/trip_repository.dart';
+import 'package:voycontigo/features/trips/domain/stops_catalog.dart';
+import 'package:voycontigo/features/trips/presentation/widgets/stop_line_picker.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:voycontigo/core/services/notification_service.dart';
 import 'package:voycontigo/core/utils/date_format.dart';
-
-class Hub {
-  final String name;
-  final double lat;
-  final double lng;
-  const Hub(this.name, this.lat, this.lng);
-}
-
-const List<Hub> machachiHubs = [
-  Hub('Parque Central', -0.5097, -78.5672),
-  Hub('El Aki', -0.5100, -78.5650),
-  Hub('Redondel Norte', -0.5000, -78.5670),
-];
-
-const List<Hub> quitoHubs = [
-  Hub('El Trébol', -0.2289, -78.5028),
-  Hub('U. Católica', -0.2104, -78.4907),
-  Hub('Quicentro Sur', -0.28477, -78.54487),
-  Hub('La Marín', -0.2236, -78.5042),
-];
 
 class PublishScreen extends ConsumerStatefulWidget {
   final String type; // 'oferta' o 'demanda'
@@ -55,7 +35,11 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
   double? _originLng;
   double? _destLat;
   double? _destLng;
-  
+
+  // Paraderos elegidos en la línea del corredor (null = punto libre del mapa).
+  RouteStop? _originStop;
+  RouteStop? _destStop;
+
   String _targetCity = 'Quito';
   bool _isOutbound = true; // true: Machachi -> Target, false: Target -> Machachi
   
@@ -84,64 +68,30 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
     }
   }
 
+  /// Solo auto-detecta la dirección del corredor según el GPS.
+  /// El punto exacto ya no se pre-llena: el usuario elige su paradero.
   Future<void> _loadCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
-    permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
     }
-    
     if (permission == LocationPermission.deniedForever) return;
 
-    if (mounted) {
-      setState(() {
-        _originCtrl.text = "Obteniendo ubicación...";
-      });
-    }
-
     try {
-      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       if (mounted) {
         setState(() {
-          _originLat = position.latitude;
-          _originLng = position.longitude;
-          
-          // Auto-detect direction:
-          // Latitudes south of -0.35 are closer to Machachi (approx -0.51).
-          // Latitudes north of -0.35 are closer to Quito (approx -0.22).
-          if (position.latitude < -0.35) {
-            _isOutbound = true; // Machachi ➔ Quito
-          } else {
-            _isOutbound = false; // Quito ➔ Machachi
-          }
-          _originCtrl.text = "Buscando nombre de calle...";
+          // Latitudes al sur de -0.35 están más cerca de Machachi (~ -0.51);
+          // al norte, más cerca de Quito (~ -0.22).
+          _isOutbound = position.latitude < -0.35;
         });
       }
-      
-      final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.latitude}&lon=${position.longitude}&zoom=18&addressdetails=1');
-      final response = await http.get(url, headers: {'User-Agent': 'VoyContigoApp'});
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final street = data['address']?['road'] ?? data['address']?['neighbourhood'] ?? data['display_name'];
-        if (street != null && mounted) {
-          setState(() {
-            _originCtrl.text = street.toString();
-          });
-        }
-      }
-    } catch(e) {
-      if (mounted && (_originCtrl.text == "Buscando nombre de calle..." || _originCtrl.text == "Obteniendo ubicación...")) {
-         setState(() {
-           _originCtrl.text = ""; // Limpiar si falla
-         });
-      }
+    } catch (_) {
+      // Sin GPS nos quedamos con la dirección por defecto.
     }
   }
 
@@ -169,7 +119,11 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
           _destCtrl.text = data['exactDropoff'] ?? '';
           _destLat = data['destLat'] as double?;
           _destLng = data['destLng'] as double?;
-          
+
+          // Re-sincronizar la línea de paraderos si el viaje usaba paraderos.
+          _originStop = findStopByName(_originCtrl.text);
+          _destStop = findStopByName(_destCtrl.text);
+
           _seatsCtrl.text = (data['seats'] ?? 1).toString();
           _priceCtrl.text = (data['price'] ?? 0.0).toStringAsFixed(2);
           
@@ -392,6 +346,9 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
         'carColor': _isOffer ? '' : null,
         'carPlate': _isOffer ? _carPlateCtrl.text.trim().toUpperCase() : null,
         'status': 'PENDING',
+        // Las reglas de Firestore exigen esta clave explícita en null
+        // (nadie puede pre-asignarse un viaje al crearlo).
+        'acceptedByUid': null,
         'womenOnly': _womenOnly,
         'isCreatorVerified': ref.read(appStateProvider).isVerified,
         'passengers': [],
@@ -485,6 +442,68 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
         }
       });
     }
+  }
+
+  /// Selección desde la línea de paraderos del corredor.
+  void _onStopsChanged(RouteStop? origin, RouteStop? destination) {
+    setState(() {
+      _originStop = origin;
+      _destStop = destination;
+      _originCtrl.text = origin?.name ?? '';
+      _originLat = origin?.lat;
+      _originLng = origin?.lng;
+      _destCtrl.text = destination?.name ?? '';
+      _destLat = destination?.lat;
+      _destLng = destination?.lng;
+    });
+  }
+
+  /// Punto libre elegido en el mapa: deja de ser un paradero del catálogo.
+  Future<void> _pickCustomPoint(bool isOrigin) async {
+    await _openMapPicker(isOrigin ? _originCtrl : _destCtrl, isOrigin);
+    if (!mounted) return;
+    setState(() {
+      if (isOrigin) {
+        _originStop = null;
+      } else {
+        _destStop = null;
+      }
+    });
+  }
+
+  /// Muestra el punto libre elegido en el mapa (cuando no es un paradero).
+  Widget _buildCustomPointChip(String label, String address, bool isOrigin) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.subtleGray,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.outline),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isOrigin ? Icons.my_location : Icons.location_on,
+            size: 16,
+            color: AppTheme.purpleDark,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$label: $address',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.bodyFont(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.ink,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildFrequencySelector() {
@@ -897,6 +916,8 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
                         if (!_isOutbound) {
                           setState(() {
                             _isOutbound = true;
+                            _originStop = null;
+                            _destStop = null;
                             _originCtrl.clear();
                             _originLat = null;
                             _originLng = null;
@@ -944,6 +965,8 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
                         if (_isOutbound) {
                           setState(() {
                             _isOutbound = false;
+                            _originStop = null;
+                            _destStop = null;
                             _originCtrl.clear();
                             _originLat = null;
                             _originLng = null;
@@ -989,21 +1012,47 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
             ),
             const SizedBox(height: 24),
 
-            _buildSectionTitle('Ubicaciones'),
-            const SizedBox(height: 16),
-            _buildMapInputField(
-              _isOffer ? 'Punto de encuentro' : 'Dónde puedes subirte', 
-              _originCtrl, 
-              true,
-              _isOutbound ? machachiHubs : (_targetCity == 'Quito' ? quitoHubs : []),
+            _buildSectionTitle('Paraderos'),
+            const SizedBox(height: 6),
+            Text(
+              _isOffer
+                  ? 'Toca el paradero donde recoges y luego donde dejas.'
+                  : 'Toca el paradero donde te subes y luego donde te bajas.',
+              style: AppTheme.bodyFont(fontSize: 12, color: AppTheme.inkMuted),
             ),
-            const SizedBox(height: 16),
-            _buildMapInputField(
-              _isOffer ? 'Punto de bajada' : 'Dónde te bajas', 
-              _destCtrl, 
-              false,
-              !_isOutbound ? machachiHubs : (_targetCity == 'Quito' ? quitoHubs : []),
+            const SizedBox(height: 12),
+            StopLinePicker(
+              stops: stopsForDirection(outbound: _isOutbound),
+              origin: _originStop,
+              destination: _destStop,
+              originLabel: _isOffer ? 'Recoges' : 'Subes',
+              destinationLabel: _isOffer ? 'Dejas' : 'Bajas',
+              onChanged: _onStopsChanged,
             ),
+            const SizedBox(height: 10),
+
+            // Punto libre en el mapa (caso excepcional, no el flujo principal).
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  '¿Tu punto no está en la lista?',
+                  style: AppTheme.bodyFont(fontSize: 12, color: AppTheme.inkMuted),
+                ),
+                TextButton(
+                  onPressed: () => _pickCustomPoint(true),
+                  child: const Text('Origen en mapa'),
+                ),
+                TextButton(
+                  onPressed: () => _pickCustomPoint(false),
+                  child: const Text('Destino en mapa'),
+                ),
+              ],
+            ),
+            if (_originStop == null && _originCtrl.text.isNotEmpty)
+              _buildCustomPointChip(_isOffer ? 'Recoges' : 'Subes', _originCtrl.text, true),
+            if (_destStop == null && _destCtrl.text.isNotEmpty)
+              _buildCustomPointChip(_isOffer ? 'Dejas' : 'Bajas', _destCtrl.text, false),
             const SizedBox(height: 32),
 
             _buildSectionTitle('Detalles'),
@@ -1100,119 +1149,6 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
 
   Widget _buildSectionTitle(String text) {
     return Text(text, style: AppTheme.subtitleFont(color: AppTheme.ink, fontWeight: FontWeight.w600, fontSize: 17));
-  }
-
-  Widget _buildMapInputField(String label, TextEditingController controller, bool isOrigin, List<Hub> hubs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTheme.bodyFont(
-            color: Colors.black54,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          readOnly: true,
-          onTap: () => _openMapPicker(controller, isOrigin),
-          style: AppTheme.bodyFont(
-            color: Colors.black,
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            hintText: isOrigin ? 'Establecer punto de partida' : 'Establecer destino',
-            prefixIcon: Icon(
-              isOrigin ? Icons.my_location : Icons.location_on, 
-              color: isOrigin ? AppTheme.purpleDarkest : AppTheme.purpleDark,
-            ),
-            suffixIcon: const Icon(Icons.map_outlined, color: Colors.black54),
-            filled: true,
-            fillColor: const Color(0xFFF7F7F7),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        if (hubs.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Text(
-            'Puntos de encuentro sugeridos:',
-            style: AppTheme.bodyFont(
-              color: Colors.black54,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: hubs.map((hub) {
-              final isSelected = controller.text == hub.name;
-              return GestureDetector(
-                onTap: () {
-                  controller.text = hub.name;
-                  setState(() {
-                    if (isOrigin) {
-                      _originLat = hub.lat;
-                      _originLng = hub.lng;
-                    } else {
-                      _destLat = hub.lat;
-                      _destLng = hub.lng;
-                    }
-                  });
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.black : const Color(0xFFF0F0F0),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isSelected ? Colors.black : Colors.transparent,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.location_on_outlined, 
-                        size: 14, 
-                        color: isSelected ? Colors.white : Colors.black54,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        hub.name,
-                        style: AppTheme.bodyFont(
-                          fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ],
-    );
   }
 
   Widget _buildPriceField(String label, TextEditingController controller) {
