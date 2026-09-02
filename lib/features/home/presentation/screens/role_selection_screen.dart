@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:voycontigo/features/trips/presentation/providers/trip_provider.dart';
-import 'package:voycontigo/features/trips/domain/models/trip.dart';
-import 'package:voycontigo/core/widgets/ticker_widget.dart';
-import 'package:voycontigo/core/widgets/censored_trip_card.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
 
 class RoleSelectionScreen extends ConsumerWidget {
@@ -13,7 +9,6 @@ class RoleSelectionScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncTrips = ref.watch(marketTripsStreamProvider);
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -28,21 +23,21 @@ class RoleSelectionScreen extends ConsumerWidget {
             children: [
               // MINI TICKER SIMPLIFICADO ELIMINADO
               Text(
-                'Elige tu rol\npara hoy.',
-                style: GoogleFonts.inter(
-                  color: Colors.black,
-                  fontSize: 32,
-                  letterSpacing: -1.0,
-                  fontWeight: FontWeight.w800,
+                'ELIGE TU ROL\nPARA HOY',
+                style: AppTheme.titleFont(
+                  color: AppTheme.ink,
+                  fontSize: 30,
+                  letterSpacing: -0.5,
                   height: 1.1,
                 ),
               ),
               const SizedBox(height: 32),
               _buildRoleCard(
                 context,
-                title: 'Pasajero',
-                subtitle: 'Quiero buscar o solicitar un viaje',
-                icon: Icons.person_search_rounded,
+                title: 'PASAJERO',
+                subtitle: 'Quiero buscar o solicitar\nun viaje',
+                iconPath: 'assets/passenger_icon.png', // Fallback to icon if not using images
+                icon: Icons.person_outline_rounded,
                 isPassenger: true,
                 onTap: () {
                   ref.read(boardModeProvider.notifier).state = 'pasajero';
@@ -52,9 +47,10 @@ class RoleSelectionScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               _buildRoleCard(
                 context,
-                title: 'Conductor',
-                subtitle: 'Quiero publicar o llevar a alguien',
-                icon: Icons.directions_car_rounded,
+                title: 'CONDUCTOR',
+                subtitle: 'Quiero publicar o llevar a\nalguien',
+                iconPath: 'assets/driver_icon.png', // Fallback to icon
+                icon: Icons.directions_car_outlined,
                 isPassenger: false,
                 onTap: () {
                   final appState = ref.read(appStateProvider);
@@ -78,44 +74,38 @@ class RoleSelectionScreen extends ConsumerWidget {
     required String title, 
     required String subtitle, 
     required IconData icon, 
+    String? iconPath,
     required bool isPassenger,
     required VoidCallback onTap
   }) {
-    final gradient = isPassenger 
-        ? LinearGradient(colors: [AppTheme.electricBlue, AppTheme.electricBlue.withOpacity(0.8)], begin: Alignment.topLeft, end: Alignment.bottomRight)
-        : LinearGradient(colors: [AppTheme.driverNavy, AppTheme.driverNavy.withOpacity(0.8)], begin: Alignment.topLeft, end: Alignment.bottomRight);
-    
-    final shadowColor = isPassenger ? AppTheme.electricBlue.withOpacity(0.3) : AppTheme.driverNavy.withOpacity(0.3);
+    final backgroundColor = isPassenger ? AppTheme.purpleDarkest : AppTheme.purpleMedium;
+    final iconBgColor = isPassenger ? AppTheme.purpleDark : AppTheme.purpleLightest;
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: Container(
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(16),
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: shadowColor,
+              color: backgroundColor.withOpacity(0.3),
               blurRadius: 12,
               offset: const Offset(0, 6),
-            ),
+            )
           ],
         ),
-        padding: const EdgeInsets.all(24),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
+                color: iconBgColor,
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(
-                icon,
-                size: 32,
-                color: Colors.white,
-              ),
+              child: Icon(icon, color: Colors.white, size: 32),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -124,26 +114,26 @@ class RoleSelectionScreen extends ConsumerWidget {
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
+                    style: AppTheme.bodyFont(
                       color: Colors.white,
-                      letterSpacing: -0.5,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: GoogleFonts.inter(
+                    style: AppTheme.bodyFont(
                       color: Colors.white.withOpacity(0.9),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
+                      fontSize: 13,
+                      height: 1.3,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+            const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 40),
           ],
         ),
       ),

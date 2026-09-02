@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:voycontigo/features/trips/presentation/providers/trip_provider.dart';
 
@@ -15,6 +15,8 @@ class ChatScreen extends ConsumerStatefulWidget {
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _msgCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
+  bool _sending = false;
   late final Stream<DocumentSnapshot> _tripStream;
   late final Stream<QuerySnapshot> _messagesStream;
 
@@ -33,26 +35,49 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void dispose() {
     _msgCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+      }
+    });
   }
 
   Future<void> _sendMessage() async {
     final text = _msgCtrl.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _sending) return;
 
-    final currentUser = ref.read(appStateProvider).userName;
-
+    final appState = ref.read(appStateProvider);
+    _sending = true;
     _msgCtrl.clear();
 
-    await FirebaseFirestore.instance
-        .collection('trips')
-        .doc(widget.dealId)
-        .collection('chat_messages')
-        .add({
-      'text': text,
-      'senderId': currentUser,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      await FirebaseFirestore.instance
+          .collection('trips')
+          .doc(widget.dealId)
+          .collection('chat_messages')
+          .add({
+        'text': text,
+        // Identidad por UID (no por nombre) para no confundir remitentes.
+        'senderUid': appState.uid,
+        'senderName': appState.userName,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // Si falla el envío, restaurar el texto y avisar (no perder el mensaje).
+      _msgCtrl.text = text;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo enviar el mensaje. Intenta de nuevo.')),
+        );
+      }
+    } finally {
+      _sending = false;
+    }
   }
 
   @override
@@ -66,7 +91,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
         title: Column(
           children: [
-            Text('Coordinación', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black)),
+            Text('Coordinación', style: AppTheme.bodyFont(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black)),
             Text('Trato #${widget.dealId}', style: const TextStyle(fontSize: 11, color: Colors.black54)),
           ],
         ),
@@ -97,20 +122,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 }
 
                 final messages = snapshot.data!.docs;
-                final currentUser = ref.read(appStateProvider).userName;
+                final currentUid = ref.read(appStateProvider).uid;
 
                 if (messages.isEmpty) {
                   return const Center(child: Text('Inicia la conversación', style: TextStyle(color: Colors.black45)));
                 }
 
+                _scrollToBottom();
+
                 return ListView.builder(
+                  controller: _scrollCtrl,
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final msg = messages[index].data() as Map<String, dynamic>;
                     final text = msg['text'] ?? '';
-                    final senderId = msg['senderId'];
-                    final isMe = senderId == currentUser;
+                    final senderUid = msg['senderUid'];
+                    final isMe = senderUid == currentUid;
                     return _buildMessage(text, isMe);
                   },
                 );
@@ -182,12 +210,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             children: [
               const Icon(Icons.check_circle_outline, color: Colors.black, size: 20),
               const SizedBox(width: 8),
-              Text('Viaje Confirmado', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+              Text('Viaje Confirmado', style: AppTheme.bodyFont(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
             ],
           ),
           const SizedBox(height: 12),
-          Text('Encuentro: ${tripData['exactPickup']}', style: GoogleFonts.inter(color: Colors.black87, fontSize: 13)),
-          Text('Destino: ${tripData['exactDropoff']}', style: GoogleFonts.inter(color: Colors.black87, fontSize: 13)),
+          Text('Encuentro: ${tripData['exactPickup']}', style: AppTheme.bodyFont(color: Colors.black87, fontSize: 13)),
+          Text('Destino: ${tripData['exactDropoff']}', style: AppTheme.bodyFont(color: Colors.black87, fontSize: 13)),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -198,12 +226,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       context: context,
                       builder: (dialogContext) => AlertDialog(
                         backgroundColor: Colors.white,
-                        title: Text('Cancelar Viaje', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.black)),
-                        content: Text('¿Estás seguro que deseas cancelar este viaje?', style: GoogleFonts.inter(color: Colors.black87)),
+                        title: Text('Cancelar Viaje', style: AppTheme.bodyFont(fontWeight: FontWeight.bold, color: Colors.black)),
+                        content: Text('¿Estás seguro que deseas cancelar este viaje?', style: AppTheme.bodyFont(color: Colors.black87)),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(dialogContext),
-                            child: Text('No, mantener', style: GoogleFonts.inter(color: Colors.black54)),
+                            child: Text('No, mantener', style: AppTheme.bodyFont(color: Colors.black54)),
                           ),
                           TextButton(
                             onPressed: () async {
@@ -216,7 +244,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 context.pop(); // Go back to previous screen
                               }
                             },
-                            child: Text('Sí, cancelar', style: GoogleFonts.inter(color: Colors.red, fontWeight: FontWeight.bold)),
+                            child: Text('Sí, cancelar', style: AppTheme.bodyFont(color: Colors.red, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -263,7 +291,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         constraints: const BoxConstraints(maxWidth: 250),
         child: Text(
           text,
-          style: GoogleFonts.inter(color: isMe ? Colors.white : Colors.black87, fontSize: 15),
+          style: AppTheme.bodyFont(color: isMe ? Colors.white : Colors.black87, fontSize: 15),
         ),
       ),
     );

@@ -6,17 +6,16 @@ import 'package:voycontigo/features/home/presentation/screens/home_screen.dart';
 import 'package:voycontigo/features/home/presentation/screens/role_selection_screen.dart';
 import 'package:voycontigo/features/trips/presentation/screens/publish_screen.dart';
 import 'package:voycontigo/features/trips/presentation/screens/board_screen.dart';
-import 'package:voycontigo/features/trips/presentation/screens/my_trips_screen.dart';
+import 'package:voycontigo/features/trips/presentation/screens/agenda_screen.dart';
 import 'package:voycontigo/features/profile/presentation/screens/profile_screen.dart';
-import 'package:voycontigo/features/profile/presentation/screens/paywall_screen.dart';
 import 'package:voycontigo/features/trips/presentation/screens/map_picker_screen.dart';
 import 'package:voycontigo/features/chat/presentation/screens/chat_screen.dart';
 import 'package:voycontigo/features/trips/presentation/screens/live_tracking_screen.dart';
 import 'package:voycontigo/features/trips/presentation/screens/matches_screen.dart';
 import 'package:voycontigo/features/profile/presentation/screens/settings_screen.dart';
 import 'package:voycontigo/features/profile/presentation/screens/verification_screen.dart';
-import 'package:voycontigo/features/subscription/presentation/screens/subscription_screen.dart';
 import 'package:voycontigo/features/profile/presentation/screens/rewards_screen.dart';
+import 'package:voycontigo/features/profile/presentation/screens/admin_panel_screen.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -36,16 +35,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const RoleSelectionScreen(),
       ),
       GoRoute(
-        path: '/paywall',
-        builder: (context, state) => const PaywallScreen(),
-      ),
-      GoRoute(
         path: '/verify',
         builder: (context, state) => const VerificationScreen(),
-      ),
-      GoRoute(
-        path: '/subscription',
-        builder: (context, state) => const SubscriptionScreen(),
       ),
       GoRoute(
         path: '/map-picker',
@@ -77,6 +68,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
       ),
+      GoRoute(
+        path: '/admin',
+        builder: (context, state) => const AdminPanelScreen(),
+      ),
       ShellRoute(
         navigatorKey: shellNavigatorKey,
         builder: (context, state, child) {
@@ -95,7 +90,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/my-trips',
-            builder: (context, state) => const MyTripsScreen(),
+            builder: (context, state) => const AgendaScreen(),
           ),
           GoRoute(
             path: '/profile',

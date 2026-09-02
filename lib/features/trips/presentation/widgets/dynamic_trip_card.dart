@@ -2,12 +2,12 @@ import 'dart:ui'; // For ImageFilter
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:voycontigo/features/trips/domain/models/trip.dart';
 import 'package:go_router/go_router.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
+import 'package:voycontigo/core/utils/date_format.dart';
 
 class DynamicTripCard extends StatefulWidget {
   final TripBoardItem item;
@@ -75,6 +75,76 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
     }
   }
 
+  Widget _buildStatusBadge(String status) {
+    Color bgColor;
+    Color textColor;
+    String text;
+    IconData icon;
+
+    switch (status) {
+      case 'CANCELLED':
+        bgColor = Colors.red.withOpacity(0.1);
+        textColor = Colors.red[700]!;
+        text = 'CANCELADO';
+        icon = Icons.cancel;
+        break;
+      case 'COMPLETED':
+        bgColor = Colors.green.withOpacity(0.1);
+        textColor = Colors.green[700]!;
+        text = 'COMPLETADO';
+        icon = Icons.check_circle;
+        break;
+      case 'EN_ROUTE':
+        bgColor = AppTheme.tommyNavy.withOpacity(0.1);
+        textColor = AppTheme.tommyNavy;
+        text = 'EN CAMINO';
+        icon = Icons.directions_car;
+        break;
+      case 'ACCEPTED':
+        bgColor = AppTheme.purpleLightest.withOpacity(0.15);
+        textColor = AppTheme.purpleDarkest;
+        text = 'ACEPTADO';
+        icon = Icons.handshake;
+        break;
+      case 'FULL':
+        bgColor = Colors.orange.withOpacity(0.1);
+        textColor = Colors.orange[800]!;
+        text = 'LLENO';
+        icon = Icons.group;
+        break;
+      default: // PENDING
+        bgColor = Colors.grey.withOpacity(0.1);
+        textColor = Colors.black54;
+        text = 'BUSCANDO...';
+        icon = Icons.search;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: textColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: textColor),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: AppTheme.bodyFont(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
@@ -86,19 +156,9 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
     // Calculamos el tiempo restante
     final now = DateTime.now();
     final difference = item.scheduleTime.difference(now);
-    
-    String timeLeftText = '';
-    Color timeLeftColor = Colors.black87;
-    
-    if (difference.isNegative) {
-      timeLeftText = 'Salida superada';
-      timeLeftColor = Colors.black45;
-    } else if (difference.inMinutes < 60) {
-      timeLeftText = 'Sale en ${difference.inMinutes} min';
-      timeLeftColor = Colors.black;
-    } else {
-      timeLeftText = 'Sale en ${difference.inHours}h ${difference.inMinutes % 60}m';
-    }
+
+    final String timeLeftText = VoyDate.relativeDeparture(item.scheduleTime, now: now);
+    final Color timeLeftColor = difference.isNegative ? AppTheme.inkMuted : AppTheme.ink;
 
     // Simulador de urgencia realista: más vistas si la salida está próxima
     int viewersCount = 1;
@@ -132,6 +192,14 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (item.status != 'PENDING' && item.status != 'FULL') ...[
+            _buildStatusBadge(item.status),
+            const SizedBox(height: 12),
+          ],
+          if (item.status == 'PENDING' || item.status == 'FULL') ...[
+            _buildStatusBadge(item.status),
+            const SizedBox(height: 12),
+          ],
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,7 +216,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                             imageFilter: ImageFilter.blur(sigmaX: isCensored ? 4 : 0, sigmaY: isCensored ? 4 : 0),
                             child: Text(
                               isCensored ? 'Conductor Oculto' : item.userName, 
-                              style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 14, letterSpacing: -0.3),
+                              style: AppTheme.bodyFont(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 14, letterSpacing: -0.3),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -177,7 +245,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                             children: [
                               const Icon(Icons.star, size: 12, color: Colors.amber),
                               const SizedBox(width: 2),
-                              Text('${item.rating}', style: GoogleFonts.inter(color: Colors.amber[900], fontWeight: FontWeight.w700, fontSize: 11)),
+                              Text('${item.rating}', style: AppTheme.bodyFont(color: Colors.amber[900], fontWeight: FontWeight.w700, fontSize: 11)),
                             ],
                           ),
                         ),
@@ -186,7 +254,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                           children: [
                             const Icon(Icons.visibility_outlined, size: 12, color: Colors.black45),
                             const SizedBox(width: 4),
-                            Text('$viewersCount viendo', style: GoogleFonts.inter(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.w500)),
+                            Text('$viewersCount viendo', style: AppTheme.bodyFont(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.w500)),
                           ],
                         ),
                         if (item.womenOnly)
@@ -202,7 +270,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                               children: [
                                 const Icon(Icons.female, color: Colors.pink, size: 10),
                                 const SizedBox(width: 2),
-                                Text('Solo Mujeres', style: GoogleFonts.inter(color: Colors.pink, fontSize: 9, fontWeight: FontWeight.bold)),
+                                Text('Solo Mujeres', style: AppTheme.bodyFont(color: Colors.pink, fontSize: 9, fontWeight: FontWeight.bold)),
                               ],
                             ),
                           ),
@@ -217,7 +285,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                   color: Colors.black.withOpacity(0.04),
                   borderRadius: BorderRadius.circular(6)
                 ),
-                child: Text('\$${item.price?.toStringAsFixed(2)}', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 14)),
+                child: Text('\$${item.price?.toStringAsFixed(2) ?? '0.00'}', style: AppTheme.bodyFont(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 14)),
               )
             ],
           ),
@@ -243,12 +311,12 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                   children: [
                     ImageFiltered(
                       imageFilter: ImageFilter.blur(sigmaX: isCensored ? 3 : 0, sigmaY: isCensored ? 3 : 0),
-                      child: Text(isCensored ? item.origin.split(',').first : '${item.origin} - ${item.exactPickup}', style: GoogleFonts.inter(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      child: Text(isCensored ? item.origin.split(',').first : '${item.origin} - ${item.exactPickup}', style: AppTheme.bodyFont(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                     ),
                     const SizedBox(height: 10),
                     ImageFiltered(
                       imageFilter: ImageFilter.blur(sigmaX: isCensored ? 3 : 0, sigmaY: isCensored ? 3 : 0),
-                      child: Text(isCensored ? item.destination.split(',').first : '${item.destination} - ${item.exactDropoff}', style: GoogleFonts.inter(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      child: Text(isCensored ? item.destination.split(',').first : '${item.destination} - ${item.exactDropoff}', style: AppTheme.bodyFont(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
                     ),
                   ],
                 ),
@@ -272,7 +340,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                   Expanded(
                     child: Text(
                       'Vía: ${item.stops.join(', ')}',
-                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary),
+                      style: AppTheme.bodyFont(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary),
                     ),
                   ),
                 ],
@@ -354,12 +422,29 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
             spacing: 4,
             runSpacing: 8,
             children: [
-              Row(
+              Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.access_time, size: 12, color: timeLeftColor),
-                  const SizedBox(width: 4),
-                  Flexible(child: Text(timeLeftText, style: GoogleFonts.inter(color: timeLeftColor, fontSize: 11, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_today, size: 11, color: AppTheme.ink),
+                      const SizedBox(width: 4),
+                      Text(VoyDate.shortDateTime(item.scheduleTime),
+                          style: AppTheme.subtitleFont(color: AppTheme.ink, fontSize: 11, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.access_time, size: 11, color: timeLeftColor),
+                      const SizedBox(width: 4),
+                      Text(timeLeftText,
+                          style: AppTheme.bodyFont(color: timeLeftColor, fontSize: 10, fontWeight: FontWeight.w500)),
+                    ],
+                  ),
                 ],
               ),
               if (item.isOffer && item.carModel != null && item.carModel!.isNotEmpty)
@@ -381,7 +466,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                           isCensored 
                             ? 'Auto Oculto' 
                             : '${item.carModel}${item.carPlate != null && item.carPlate!.isNotEmpty ? ' (${item.carPlate})' : ''}',
-                          style: GoogleFonts.inter(color: AppTheme.tommyNavy, fontSize: 10, fontWeight: FontWeight.w600),
+                          style: AppTheme.bodyFont(color: AppTheme.tommyNavy, fontSize: 10, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],
@@ -401,7 +486,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                     const SizedBox(width: 4),
                     Text(
                       item.isOffer ? '${item.availableSeats} libres' : 'Busca ${item.seats}', 
-                      style: GoogleFonts.inter(
+                      style: AppTheme.bodyFont(
                         color: item.isOffer ? AppTheme.tommyRed : AppTheme.tommyNavy, 
                         fontSize: 11, 
                         fontWeight: FontWeight.bold,
@@ -428,7 +513,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                     ),
                     onPressed: onActionPressed,
                     icon: const Icon(Icons.lock, size: 16, color: Colors.amber),
-                    label: Text('Desbloquear Viaje', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.amber, letterSpacing: -0.3)),
+                    label: Text('Desbloquear Viaje', style: AppTheme.bodyFont(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.amber, letterSpacing: -0.3)),
                   )
                 : FilledButton(
                     style: FilledButton.styleFrom(
@@ -437,7 +522,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
                     ),
                     onPressed: onActionPressed,
-                    child: Text(isOfferList ? 'Reservar Asiento' : 'Aceptar Pasajero', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white, letterSpacing: -0.3)),
+                    child: Text(isOfferList ? 'Reservar Asiento' : 'Aceptar Pasajero', style: AppTheme.bodyFont(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white, letterSpacing: -0.3)),
                   ),
             )
           else if (item.status == 'ACCEPTED' || item.status == 'EN_ROUTE' || item.status == 'FULL' || (item.status == 'PENDING' && isReadOnly && (item.isOffer ? item.passengers.isNotEmpty : item.acceptedByUid != null)))
@@ -452,7 +537,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                 ),
                 onPressed: () => context.push('/tracking/${item.id}'),
                 icon: const Icon(Icons.location_on, size: 18, color: Colors.white),
-                label: Text('Ir al Chat / Seguimiento', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white, letterSpacing: -0.3)),
+                label: Text('Ir al Chat / Seguimiento', style: AppTheme.bodyFont(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white, letterSpacing: -0.3)),
               ),
             )
           else
@@ -466,7 +551,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                       color: Colors.black.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(10)
                     ),
-                    child: Text(item.status == 'PENDING' ? (item.isOffer ? 'Esperando más pasajeros...' : 'Esperando conductor...') : 'Solo lectura', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black45)),
+                    child: Text(item.status == 'PENDING' ? (item.isOffer ? 'Esperando más pasajeros...' : 'Esperando conductor...') : 'Solo lectura', style: AppTheme.bodyFont(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black45)),
                   ),
                 ),
                 if (widget.onCancelPressed != null) ...[

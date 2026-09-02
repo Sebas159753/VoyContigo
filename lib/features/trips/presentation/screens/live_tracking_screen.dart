@@ -1,7 +1,7 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -78,22 +78,59 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
     }
 
     if (isDriverCheck) {
-      // Pedir permisos de ubicación
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      try {
+        // Pedir permisos de ubicación
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Servicios de ubicación deshabilitados.')));
+          return;
+        }
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return;
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+          if (permission == LocationPermission.denied) {
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permiso de ubicación denegado.')));
+            return;
+          }
+        }
+        if (permission == LocationPermission.deniedForever) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permisos denegados permanentemente.')));
+          return;
+        }
+
+      late LocationSettings locationSettings;
+      
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        locationSettings = AndroidSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 10,
+            forceLocationManager: true,
+            intervalDuration: const Duration(seconds: 10),
+            foregroundNotificationConfig: const ForegroundNotificationConfig(
+                notificationText: "VoyContigo está utilizando tu ubicación en segundo plano",
+                notificationTitle: "Viaje en progreso",
+                enableWakeLock: true,
+            )
+        );
+      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+        locationSettings = AppleSettings(
+          accuracy: LocationAccuracy.high,
+          activityType: ActivityType.automotiveNavigation,
+          distanceFilter: 10,
+          pauseLocationUpdatesAutomatically: true,
+          showBackgroundLocationIndicator: true,
+        );
+      } else {
+        locationSettings = const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10,
+        );
       }
 
       // Iniciar el stream de GPS y actualizar Firestore
       _positionStream = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 10, // Actualizar cada 10 metros
-        ),
+        locationSettings: locationSettings,
       ).listen((Position position) {
         Map<String, dynamic> updates = {
           'currentLat': position.latitude,
@@ -116,7 +153,18 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
         
         // Mover la cámara a la nueva posición
         _mapController.move(LatLng(position.latitude, position.longitude), 16.0);
+      }, onError: (error) {
+        debugPrint("Error in location stream: $error");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error de GPS: $error')));
+        }
       });
+      } catch (e) {
+        debugPrint("Error initializing location: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo iniciar el GPS: $e')));
+        }
+      }
     }
   }
 
@@ -182,8 +230,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
       return;
     }
 
-    // 2. Formatear número para Ecuador (quitar el 0 inicial si existe y añadir código)
+    // 2. Normalizar a formato Ecuador: quitar todo lo no numérico, el código 593
+    //    si ya viene incluido, y el 0 inicial. Evita duplicar el prefijo (+593593...).
     String cleanPhone = emergencyPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleanPhone.startsWith('593')) {
+      cleanPhone = cleanPhone.substring(3);
+    }
     if (cleanPhone.startsWith('0')) {
       cleanPhone = cleanPhone.substring(1);
     }
@@ -222,7 +274,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
         if (!snapshot.hasData) {
           return Scaffold(
             appBar: AppBar(
-              title: Text('Seguimiento en Vivo', style: GoogleFonts.inter(letterSpacing: -0.5)),
+              title: Text('Seguimiento en Vivo', style: AppTheme.bodyFont(letterSpacing: -0.5)),
               backgroundColor: Colors.white,
             ),
             body: const Center(child: CircularProgressIndicator(color: Colors.black)),
@@ -233,7 +285,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
         if (data == null) {
           return Scaffold(
             appBar: AppBar(
-              title: Text('Seguimiento en Vivo', style: GoogleFonts.inter(letterSpacing: -0.5)),
+              title: Text('Seguimiento en Vivo', style: AppTheme.bodyFont(letterSpacing: -0.5)),
               backgroundColor: Colors.white,
             ),
             body: const Center(child: Text('Viaje no encontrado')),
@@ -257,23 +309,11 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
           isDriver = trip.acceptedByUid == currentUid;
         }
 
-        // Si están probando con la misma cuenta para creador y aceptado:
-        if (trip.creatorUid == trip.acceptedByUid) {
-           // En pruebas propias, la lógica falla porque eres ambos.
-           // Forzaremos el rol basado en si era oferta o no para que veas el ticket original.
-           isDriver = trip.isOffer; 
-        }
-
         bool isParticipant = false;
         if (trip.isOffer) {
           isParticipant = trip.creatorUid == currentUid || trip.passengers.any((p) => p['uid'] == currentUid);
         } else {
           isParticipant = trip.creatorUid == currentUid || trip.acceptedByUid == currentUid;
-        }
-
-        // Single device testing exception
-        if (trip.creatorUid == trip.acceptedByUid) {
-          isParticipant = true;
         }
 
         if (!isParticipant && trip.status != 'CANCELLED' && trip.status != 'COMPLETED') {
@@ -310,6 +350,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
           _hasShownRating = true;
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             List<Map<String, String>> usersToRate = [];
+            final myGivenRatings = trip.ratingsGiven[currentUid] as List<dynamic>? ?? [];
             
             if (trip.isOffer) {
               if (isDriver) {
@@ -317,27 +358,34 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                 for (var p in trip.passengers) {
                   final pUid = p['uid']?.toString() ?? '';
                   final pName = p['name']?.toString() ?? 'Pasajero';
-                  if (pUid.isNotEmpty) {
+                  if (pUid.isNotEmpty && !myGivenRatings.contains(pUid)) {
                     usersToRate.add({'uid': pUid, 'name': pName});
                   }
                 }
               } else {
                 // Pasajero califica al conductor
-                usersToRate.add({'uid': trip.creatorUid, 'name': trip.userName});
+                if (!myGivenRatings.contains(trip.creatorUid)) {
+                  usersToRate.add({'uid': trip.creatorUid, 'name': trip.userName});
+                }
               }
             } else {
               if (isDriver) {
                 // Conductor califica al pasajero demandante
-                usersToRate.add({'uid': trip.creatorUid, 'name': trip.userName});
+                if (!myGivenRatings.contains(trip.creatorUid)) {
+                  usersToRate.add({'uid': trip.creatorUid, 'name': trip.userName});
+                }
               } else {
                 // Pasajero califica al conductor
-                usersToRate.add({'uid': trip.acceptedByUid ?? '', 'name': trip.acceptedByName ?? 'Conductor'});
+                final driverUid = trip.acceptedByUid ?? '';
+                if (driverUid.isNotEmpty && !myGivenRatings.contains(driverUid)) {
+                  usersToRate.add({'uid': driverUid, 'name': trip.acceptedByName ?? 'Conductor'});
+                }
               }
             }
 
             for (var user in usersToRate) {
               if (mounted && user['uid']!.isNotEmpty) {
-                await showDialog(
+                final result = await showDialog<bool>(
                   context: context,
                   barrierDismissible: false,
                   builder: (ctx) => RatingDialog(
@@ -345,6 +393,13 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     targetUserName: user['name']!,
                   ),
                 );
+                
+                if (result != null) {
+                  // User either rated (true) or skipped (false), record it so we don't ask again
+                  await FirebaseFirestore.instance.collection('trips').doc(widget.tripId).update({
+                    'ratingsGiven.$currentUid': FieldValue.arrayUnion([user['uid']])
+                  });
+                }
               }
             }
             
@@ -356,7 +411,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text('Seguimiento en Vivo', style: GoogleFonts.inter(letterSpacing: -0.5)),
+            title: Text('Seguimiento en Vivo', style: AppTheme.bodyFont(letterSpacing: -0.5)),
             backgroundColor: Colors.white,
             actions: [
               IconButton(
@@ -466,7 +521,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     ),
                     child: Text(
                       'Esperando ubicación del conductor...',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      style: AppTheme.bodyFont(fontWeight: FontWeight.w600),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -488,7 +543,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       await ref.read(tripRepositoryProvider).updateTripStatus(widget.tripId, 'EN_ROUTE');
                     },
                     icon: const Icon(Icons.play_arrow, color: Colors.white),
-                    label: Text('Iniciar Viaje', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                    label: Text('Iniciar Viaje', style: AppTheme.bodyFont(color: Colors.white, fontWeight: FontWeight.bold)),
                   )
                 else
                   FloatingActionButton.extended(
@@ -506,7 +561,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                       }
                     },
                     icon: const Icon(Icons.flag, color: Colors.white),
-                    label: Text('Finalizar Viaje', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                    label: Text('Finalizar Viaje', style: AppTheme.bodyFont(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 const SizedBox(height: 12),
               ],
@@ -515,7 +570,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                 backgroundColor: AppTheme.tommyNavy,
                 onPressed: () => context.push('/chat/${widget.tripId}'),
                 icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-                label: Text('Abrir Chat', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                label: Text('Abrir Chat', style: AppTheme.bodyFont(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 12),
               ElevatedButton.icon(
@@ -535,7 +590,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                   _triggerPanic(currentLat, currentLng);
                 },
                 icon: const Icon(Icons.shield, color: Colors.white),
-                label: Text('S.O.S', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                label: Text('S.O.S', style: AppTheme.bodyFont(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),

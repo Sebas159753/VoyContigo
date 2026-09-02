@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:voycontigo/features/trips/presentation/providers/trip_provider.dart';
 
 class CouponsCarousel extends ConsumerWidget {
@@ -70,7 +70,7 @@ class CouponsCarousel extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         coupon['title'] as String,
-                        style: GoogleFonts.inter(
+                        style: AppTheme.bodyFont(
                           fontWeight: FontWeight.bold,
                           color: isUnlocked ? Colors.white : Colors.black87,
                           fontSize: 16,
@@ -130,7 +130,7 @@ class CouponsCarousel extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Text(
                         'Te faltan $remaining viajes',
-                        style: GoogleFonts.inter(color: Colors.black54, fontWeight: FontWeight.w600, fontSize: 14),
+                        style: AppTheme.bodyFont(color: Colors.black54, fontWeight: FontWeight.w600, fontSize: 14),
                       ),
                     ],
                   ),

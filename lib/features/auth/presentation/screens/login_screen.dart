@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:voycontigo/features/trips/presentation/providers/trip_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:voycontigo/features/home/presentation/screens/role_selection_screen.dart';
 import 'package:voycontigo/core/services/notification_service.dart';
 import 'package:voycontigo/core/utils/error_handler.dart';
 
@@ -155,6 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           'lastResetMonth': currentYearMonth,
           'createdAt': FieldValue.serverTimestamp(),
           'completedTrips': 0,
+          'role': 'USER',
         });
         
         ref.read(appStateProvider.notifier).login(
@@ -267,6 +267,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             'isVerified': false,
             'lastResetMonth': currentYearMonth,
             'createdAt': FieldValue.serverTimestamp(),
+            'role': 'USER',
           });
         }
 
@@ -321,17 +322,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 32),
               Text(
                 'VoyContigo.',
-                style: GoogleFonts.inter(
-                  fontSize: 48,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black,
-                  letterSpacing: -1.5,
+                style: AppTheme.titleFont(
+                  fontSize: 50,
+                  color: AppTheme.purpleDarkest,
+                  letterSpacing: -1.0,
                 ),
                 textAlign: TextAlign.center,
               ),
               Text(
                 'Tu viaje. Tus reglas.',
-                style: GoogleFonts.inter(
+                style: AppTheme.bodyFont(
                   fontSize: 20,
                   fontWeight: FontWeight.w400,
                   color: Colors.black54,
@@ -379,7 +379,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: _resetPassword,
-                    child: Text('¿Olvidaste tu contraseña?', style: GoogleFonts.inter(color: Colors.black54, fontSize: 13)),
+                    child: Text('¿Olvidaste tu contraseña?', style: AppTheme.bodyFont(color: Colors.black54, fontSize: 13)),
                   ),
                 )
               else ...[
@@ -399,7 +399,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Expanded(
                       child: Text(
                         'Acepto los términos y condiciones de servicio y políticas de privacidad.',
-                        style: GoogleFonts.inter(fontSize: 12, color: Colors.black54),
+                        style: AppTheme.bodyFont(fontSize: 12, color: Colors.black54),
                       ),
                     )
                   ],
@@ -419,7 +419,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Expanded(child: Container(height: 1, color: Colors.black12)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('O', style: GoogleFonts.inter(color: Colors.black54, fontWeight: FontWeight.bold)),
+                    child: Text('O', style: AppTheme.bodyFont(color: Colors.black54, fontWeight: FontWeight.bold)),
                   ),
                   Expanded(child: Container(height: 1, color: Colors.black12)),
                 ],
@@ -428,7 +428,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               OutlinedButton.icon(
                 onPressed: _isLoading ? null : _handleGoogleSignIn,
                 icon: Image.network('https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/120px-Google_%22G%22_logo.svg.png', height: 20, errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, color: Colors.black)),
-                label: Text('Continuar con Google', style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.bold)),
+                label: Text('Continuar con Google', style: AppTheme.bodyFont(color: Colors.black, fontWeight: FontWeight.bold)),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   side: const BorderSide(color: Colors.black26),
@@ -441,7 +441,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 children: [
                   Text(
                     _isLogin ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?',
-                    style: GoogleFonts.inter(color: Colors.black54),
+                    style: AppTheme.bodyFont(color: Colors.black54),
                   ),
                   TextButton(
                     onPressed: () {
@@ -454,7 +454,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     },
                     child: Text(
                       _isLogin ? 'Regístrate aquí' : 'Inicia Sesión',
-                      style: GoogleFonts.inter(
+                      style: AppTheme.bodyFont(
                         color: Colors.black,
                         fontWeight: FontWeight.w700,
                       ),

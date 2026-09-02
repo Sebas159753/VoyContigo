@@ -34,14 +34,9 @@ class HomeScreen extends StatelessWidget {
             label: 'Tablero',
           ),
           NavigationDestination(
-            icon: Icon(Icons.history_outlined, color: Colors.black54),
-            selectedIcon: Icon(Icons.history, color: Colors.black),
-            label: 'Viajes',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined, color: Colors.black54),
-            selectedIcon: Icon(Icons.auto_awesome, color: Colors.black),
-            label: 'Conexiones',
+            icon: Icon(Icons.event_note_outlined, color: Colors.black54),
+            selectedIcon: Icon(Icons.event_note, color: Colors.black),
+            label: 'Agenda',
           ),
           NavigationDestination(
             icon: Icon(Icons.emoji_events_outlined, color: Colors.black54),
@@ -62,9 +57,8 @@ class HomeScreen extends StatelessWidget {
     final String location = GoRouterState.of(context).uri.path;
     if (location.startsWith('/tablero')) return 0;
     if (location.startsWith('/my-trips')) return 1;
-    if (location.startsWith('/matches')) return 2;
-    if (location.startsWith('/rewards')) return 3;
-    if (location.startsWith('/profile')) return 4;
+    if (location.startsWith('/rewards')) return 2;
+    if (location.startsWith('/profile')) return 3;
     return 0;
   }
 
@@ -77,12 +71,9 @@ class HomeScreen extends StatelessWidget {
         context.go('/my-trips');
         break;
       case 2:
-        context.go('/matches');
-        break;
-      case 3:
         context.go('/rewards');
         break;
-      case 4:
+      case 3:
         context.go('/profile');
         break;
     }

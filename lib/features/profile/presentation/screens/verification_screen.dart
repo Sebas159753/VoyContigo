@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import 'package:voycontigo/features/trips/presentation/providers/trip_provider.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
 
@@ -31,9 +31,10 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
     final rawPlate = _carPlateCtrl.text.trim().toUpperCase();
     final carModel = _carModelCtrl.text.trim();
 
-    if (license.isEmpty || license.length < 5) {
+    final licenseRegex = RegExp(r'^\d{10}$');
+    if (!licenseRegex.hasMatch(license)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, ingresa un número de licencia válido')),
+        const SnackBar(content: Text('Por favor, ingresa los 10 dígitos de tu licencia/cédula')),
       );
       return;
     }
@@ -99,7 +100,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text('Verificación de Conductor', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        title: Text('Verificación de Conductor', style: AppTheme.bodyFont(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
       ),
@@ -113,10 +114,9 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
               const SizedBox(height: 24),
               Text(
                 'Confianza y Seguridad',
-                style: GoogleFonts.inter(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black,
+                style: AppTheme.titleFont(
+                  fontSize: 26,
+                  color: AppTheme.ink,
                   letterSpacing: -0.5,
                 ),
                 textAlign: TextAlign.center,
@@ -124,16 +124,19 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
               const SizedBox(height: 8),
               Text(
                 'Para ofrecer viajes en nuestra comunidad, necesitamos validar los datos de tu vehículo y licencia. Esto garantiza la seguridad de todos.',
-                style: GoogleFonts.inter(fontSize: 14, color: Colors.black54),
+                style: AppTheme.bodyFont(fontSize: 14, color: Colors.black54),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
               
               TextFormField(
                 controller: _licenseCtrl,
-                keyboardType: TextInputType.text,
+                keyboardType: TextInputType.number,
+                maxLength: 10,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   labelText: 'Número de Licencia de Conducir',
+                  helperText: '10 dígitos numéricos (Cédula ecuatoriana)',
                   prefixIcon: const Icon(Icons.badge_outlined),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -158,9 +161,11 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
 
               TextFormField(
                 controller: _carModelCtrl,
-                textCapitalization: TextCapitalization.sentences,
+                textCapitalization: TextCapitalization.words,
+                maxLength: 50,
                 decoration: InputDecoration(
-                  labelText: 'Modelo, Marca y Color (ej: Chevrolet Aveo Azul)',
+                  labelText: 'Marca, Modelo y Color del Vehículo',
+                  helperText: 'Ej: Chevrolet Aveo Azul',
                   prefixIcon: const Icon(Icons.directions_car_outlined),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -178,7 +183,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                 ),
                 child: _isLoading 
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text('Validar Identidad', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  : Text('Validar Identidad', style: AppTheme.bodyFont(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
               ),
             ],
           ),

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:voycontigo/features/trips/domain/models/trip.dart';
 import 'package:voycontigo/features/trips/presentation/providers/trip_provider.dart';
+import 'package:voycontigo/core/utils/date_format.dart';
 
 class CensoredTripCard extends ConsumerWidget {
   final TripBoardItem item;
@@ -40,14 +41,14 @@ class CensoredTripCard extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(displayName, style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.black87)),
+              Text(displayName, style: AppTheme.bodyFont(fontWeight: FontWeight.bold, color: Colors.black87)),
               Icon(canSee ? Icons.public : Icons.lock, size: 14, color: canSee ? Colors.green : Colors.black54),
             ],
           ),
           const SizedBox(height: 8),
-          Text('${item.origin} ➔ ${item.destination}', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text('${item.origin} ➔ ${item.destination}', style: AppTheme.bodyFont(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black), maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
-          Text('${item.scheduleTime.hour}:${item.scheduleTime.minute.toString().padLeft(2, '0')} • \$${item.price?.toStringAsFixed(2) ?? '0.00'}', style: GoogleFonts.inter(fontSize: 12, color: Colors.black54)),
+          Text('${VoyDate.dayShort(item.scheduleTime)} · ${VoyDate.time(item.scheduleTime)} • \$${item.price?.toStringAsFixed(2) ?? '0.00'}', style: AppTheme.bodyFont(fontSize: 12, color: Colors.black54)),
           const Spacer(),
           Container(
             width: double.infinity,
@@ -59,7 +60,7 @@ class CensoredTripCard extends ConsumerWidget {
             alignment: Alignment.center,
             child: Text(
               canSee ? 'Contactar' : 'Premium para Ver', 
-              style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: canSee ? Colors.white : Colors.black87)
+              style: AppTheme.bodyFont(fontSize: 10, fontWeight: FontWeight.w700, color: canSee ? Colors.white : Colors.black87)
             ),
           )
         ],

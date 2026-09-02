@@ -41,6 +41,7 @@ class TripBoardItem {
   
   final DateTime createdAt;
   final String? recurringGroupId;
+  final Map<String, dynamic> ratingsGiven; // Format: { 'raterUid': ['ratedUid1', 'ratedUid2'] }
 
   TripBoardItem({
     required this.id,
@@ -74,6 +75,7 @@ class TripBoardItem {
     this.stops = const [],
     required this.createdAt,
     this.recurringGroupId,
+    this.ratingsGiven = const {},
   });
 
   factory TripBoardItem.fromFirestore(String id, Map<String, dynamic> data) {
@@ -111,6 +113,7 @@ class TripBoardItem {
       stops: data['stops'] != null ? List<String>.from(data['stops']) : [],
       createdAt: data['createdAt'] is Timestamp ? (data['createdAt'] as Timestamp).toDate() : DateTime.now(),
       recurringGroupId: data['recurringGroupId'],
+      ratingsGiven: data['ratingsGiven'] != null ? Map<String, dynamic>.from(data['ratingsGiven']) : {},
     );
   }
 }

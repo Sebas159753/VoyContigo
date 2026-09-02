@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:voycontigo/core/theme/app_theme.dart';
 
 class ErrorHandler {
   /// Devuelve un mensaje de error amigable para el usuario basado en la excepción técnica.
@@ -67,7 +67,7 @@ class ErrorHandler {
             Expanded(
               child: Text(
                 getFriendlyErrorMessage(error),
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
+                style: AppTheme.bodyFont(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
               ),
             ),
           ],
@@ -95,7 +95,7 @@ class ErrorHandler {
             Expanded(
               child: Text(
                 message,
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
+                style: AppTheme.bodyFont(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
               ),
             ),
           ],

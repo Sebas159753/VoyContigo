@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:convert';
@@ -21,6 +21,8 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
   // Coordenadas iniciales (Quito, Ecuador)
   LatLng _currentCenter = const LatLng(-0.22985, -78.52495);
   String _currentAddressName = "Ubicación Seleccionada";
+  // true si el pin sigue en el resultado buscado; false si el usuario arrastró.
+  bool _pinnedFromSearch = false;
 
   // Buscador
   final TextEditingController _searchCtrl = TextEditingController();
@@ -42,7 +44,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
         // Añadimos viewbox para priorizar resultados en la zona de Pichincha (Quito/Machachi)
         // viewbox = left(lon), top(lat), right(lon), bottom(lat)
         final String viewbox = "-79.5,0.5,-77.5,-1.0";
-        final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=5&countrycodes=ec&viewbox=$viewbox');
+        final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=${Uri.encodeQueryComponent(query)}&format=json&limit=5&countrycodes=ec&viewbox=$viewbox');
         final response = await http.get(url, headers: {'User-Agent': 'VoyContigoApp/1.0'});
         
         if (response.statusCode == 200) {
@@ -84,6 +86,9 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       _searchResults = [];
       _searchCtrl.text = result['display_name'].toString().split(',').first;
       _currentAddressName = _searchCtrl.text;
+      // El pin y las coordenadas devueltas deben ir al lugar buscado.
+      _currentCenter = newLocation;
+      _pinnedFromSearch = true;
     });
 
     _mapController.move(newLocation, 16.0);
@@ -112,6 +117,8 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
               onPositionChanged: (camera, hasGesture) {
                 if (hasGesture) {
                   _currentCenter = camera.center;
+                  // Al arrastrar, el nombre buscado ya no corresponde al pin.
+                  _pinnedFromSearch = false;
                 }
               },
             ),
@@ -222,7 +229,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
 
                         return ListTile(
                           leading: const Icon(Icons.location_on_outlined),
-                          title: Text("${result['display_name'].toString().split(',').first}$typeLabel", style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+                          title: Text("${result['display_name'].toString().split(',').first}$typeLabel", style: AppTheme.bodyFont(fontWeight: FontWeight.w600, fontSize: 14)),
                           subtitle: Text(result['display_name'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
                           onTap: () => _selectResult(result),
                         );
@@ -245,17 +252,17 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
               ),
               onPressed: () {
-                // Si el usuario no buscó nada y solo movió el mapa, usar texto genérico + coordenadas
-                String finalLocation = _searchCtrl.text.isEmpty 
-                    ? "${_currentCenter.latitude.toStringAsFixed(4)}, ${_currentCenter.longitude.toStringAsFixed(4)}"
-                    : _currentAddressName;
+                // Usa el nombre buscado solo si el pin sigue ahí; si arrastraste, usa coordenadas.
+                String finalLocation = (_pinnedFromSearch && _searchCtrl.text.isNotEmpty)
+                    ? _currentAddressName
+                    : "${_currentCenter.latitude.toStringAsFixed(4)}, ${_currentCenter.longitude.toStringAsFixed(4)}";
                 context.pop({
                   'address': finalLocation,
                   'lat': _currentCenter.latitude,
                   'lng': _currentCenter.longitude,
                 });
               },
-              child: Text('Confirmar Ubicación', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: Text('Confirmar Ubicación', style: AppTheme.bodyFont(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
           )
         ],

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RatingDialog extends StatefulWidget {
@@ -81,7 +81,7 @@ class _RatingDialogState extends State<RatingDialog> {
             const SizedBox(height: 16),
             Text(
               '¡Viaje Finalizado!',
-              style: GoogleFonts.inter(
+              style: AppTheme.bodyFont(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
@@ -90,7 +90,7 @@ class _RatingDialogState extends State<RatingDialog> {
             const SizedBox(height: 8),
             Text(
               '¿Cómo calificarías a ${widget.targetUserName}?',
-              style: GoogleFonts.inter(
+              style: AppTheme.bodyFont(
                 fontSize: 16,
                 color: Colors.black54,
               ),
@@ -134,7 +134,7 @@ class _RatingDialogState extends State<RatingDialog> {
                       )
                     : Text(
                         'Enviar Calificación',
-                        style: GoogleFonts.inter(
+                        style: AppTheme.bodyFont(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
@@ -148,7 +148,7 @@ class _RatingDialogState extends State<RatingDialog> {
                 onPressed: () => Navigator.pop(context, false), // skip rating
                 child: Text(
                   'Omitir por ahora',
-                  style: GoogleFonts.inter(color: Colors.black54, fontWeight: FontWeight.w600),
+                  style: AppTheme.bodyFont(color: Colors.black54, fontWeight: FontWeight.w600),
                 ),
               ),
           ],
