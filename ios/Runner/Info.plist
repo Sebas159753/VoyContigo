@@ -20,6 +20,11 @@
 		<string>Esta aplicación requiere acceso a tu ubicación mientras está en uso para poder mostrar tu posición en el mapa y permitir que otros usuarios sigan el trayecto del viaje compartido.</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 		<string>Esta aplicación requiere acceso a tu ubicación para poder seguir la ruta del viaje compartido incluso en segundo plano si es necesario durante el trayecto.</string>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>location</string>
+			<string>fetch</string>
+		</array>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
