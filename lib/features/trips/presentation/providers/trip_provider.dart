@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:voycontigo/features/trips/domain/models/trip.dart';
 import 'package:voycontigo/core/config/app_config.dart';
+import 'package:voycontigo/core/services/notification_service.dart';
+import 'package:voycontigo/features/profile/domain/rewards_catalog.dart';
 
 // Definimos el estado global extendido para manejar la sesión en memoria (quitando los viajes locales).
 class AppState {
@@ -23,6 +25,8 @@ class AppState {
   final String emergencyPhone;
   final int completedTrips;
   final List<String> redeemedRewards;
+  final String role;
+  final bool notificationsEnabled;
 
   AppState({
     required this.freeUses, 
@@ -38,6 +42,8 @@ class AppState {
     this.emergencyPhone = '',
     this.completedTrips = 0,
     this.redeemedRewards = const [],
+    this.role = 'USER',
+    this.notificationsEnabled = true,
   });
 
   AppState copyWith({
@@ -54,6 +60,8 @@ class AppState {
     String? emergencyPhone,
     int? completedTrips,
     List<String>? redeemedRewards,
+    String? role,
+    bool? notificationsEnabled,
   }) {
     return AppState(
       freeUses: freeUses ?? this.freeUses,
@@ -69,6 +77,8 @@ class AppState {
       emergencyPhone: emergencyPhone ?? this.emergencyPhone,
       completedTrips: completedTrips ?? this.completedTrips,
       redeemedRewards: redeemedRewards ?? this.redeemedRewards,
+      role: role ?? this.role,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     );
   }
 }
@@ -156,6 +166,7 @@ class AppNotifier extends StateNotifier<AppState> {
       _userSubscription = FirebaseFirestore.instance.collection('users').doc(uid).snapshots().listen((doc) {
         if (doc.exists) {
           final data = doc.data()!;
+          final previousTrips = state.completedTrips;
           state = state.copyWith(
             userName: data['name'] ?? state.userName,
             userEmail: data['email'] ?? state.userEmail,
@@ -169,9 +180,26 @@ class AppNotifier extends StateNotifier<AppState> {
             emergencyPhone: data['emergencyPhone'] ?? state.emergencyPhone,
             completedTrips: data['completedTrips'] ?? state.completedTrips,
             redeemedRewards: List<String>.from(data['redeemedRewards'] ?? []),
+            role: data['role'] ?? state.role,
+            notificationsEnabled: data['notificationsEnabled'] ?? true,
           );
+          NotificationService().setNotificationsEnabled(state.notificationsEnabled);
+          _notifyNewRewards(previousTrips, state.completedTrips);
         }
       });
+    }
+  }
+
+  /// Dispara una notificación local por cada recompensa que se desbloquea al
+  /// aumentar el contador de viajes completados durante la sesión.
+  void _notifyNewRewards(int oldTrips, int newTrips) {
+    if (newTrips <= oldTrips) return;
+    for (final reward in newlyUnlockedRewards(oldTrips, newTrips)) {
+      NotificationService().showRewardUnlocked(
+        title: '¡Premio desbloqueado! 🎉',
+        body:
+            '${reward.title} — completaste ${reward.requiredTrips} viajes. Entra y raspa tu cupón.',
+      );
     }
   }
 
@@ -182,6 +210,25 @@ class AppNotifier extends StateNotifier<AppState> {
       });
     }
     state = state.copyWith(userName: name);
+  }
+
+  /// Activa/desactiva las notificaciones del usuario. Persiste la preferencia,
+  /// y al desactivar borra el token FCM y cancela los recordatorios locales.
+  Future<void> updateNotificationsEnabled(bool enabled) async {
+    state = state.copyWith(notificationsEnabled: enabled);
+    NotificationService().setNotificationsEnabled(enabled);
+
+    if (state.uid.isNotEmpty) {
+      await FirebaseFirestore.instance.collection('users').doc(state.uid).update({
+        'notificationsEnabled': enabled,
+      });
+    }
+
+    if (enabled) {
+      await NotificationService().updateToken();
+    } else {
+      await NotificationService().disablePushAndReminders();
+    }
   }
 
   Future<void> updateEmergencyPhone(String phone) async {
@@ -432,6 +479,26 @@ final myTripsStreamProvider = StreamProvider<List<TripBoardItem>>((ref) {
   });
 
   return controller.stream;
+});
+
+// Viajes próximos del usuario (para la Agenda y los recordatorios locales),
+// ordenados por hora de salida ascendente. Excluye completados y cancelados.
+final upcomingScheduledTripsProvider = Provider<List<TripBoardItem>>((ref) {
+  final async = ref.watch(myTripsStreamProvider);
+  return async.maybeWhen(
+    data: (trips) {
+      final now = DateTime.now();
+      final list = trips
+          .where((t) =>
+              t.status != 'COMPLETED' &&
+              t.status != 'CANCELLED' &&
+              t.scheduleTime.isAfter(now.subtract(const Duration(hours: 2))))
+          .toList();
+      list.sort((a, b) => a.scheduleTime.compareTo(b.scheduleTime));
+      return list;
+    },
+    orElse: () => const <TripBoardItem>[],
+  );
 });
 
 // Helper para escuchar las coincidencias desde Firestore
