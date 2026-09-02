@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:voycontigo/features/trips/presentation/providers/trip_provider.dart';
@@ -20,7 +20,7 @@ class MatchesScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text('Coincidencias', style: GoogleFonts.inter(fontWeight: FontWeight.w900, letterSpacing: -0.5, color: Colors.black87)),
+        title: Text('Coincidencias', style: AppTheme.bodyFont(fontWeight: FontWeight.w900, letterSpacing: -0.5, color: Colors.black87)),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
@@ -50,9 +50,9 @@ class MatchesScreen extends ConsumerWidget {
                       child: Icon(Icons.auto_awesome, size: 64, color: Colors.amber[600]),
                     ),
                     const SizedBox(height: 24),
-                    Text('Sin coincidencias aún', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: -0.5)),
+                    Text('Sin coincidencias aún', style: AppTheme.bodyFont(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87, letterSpacing: -0.5)),
                     const SizedBox(height: 8),
-                    Text('Publica un viaje en el tablero y nuestro sistema te emparejará automáticamente con personas compatibles.', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 14, color: Colors.black54)),
+                    Text('Publica un viaje en el tablero y nuestro sistema te emparejará automáticamente con personas compatibles.', textAlign: TextAlign.center, style: AppTheme.bodyFont(fontSize: 14, color: Colors.black54)),
                   ],
                 ),
               ),
@@ -94,7 +94,7 @@ class MatchesScreen extends ConsumerWidget {
                         Expanded(
                           child: Text(
                             isOfferSide ? '¡Encontramos un pasajero!' : '¡Encontramos un conductor!',
-                            style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 17, color: Colors.black87, letterSpacing: -0.5),
+                            style: AppTheme.bodyFont(fontWeight: FontWeight.w800, fontSize: 17, color: Colors.black87, letterSpacing: -0.5),
                           ),
                         ),
                       ],
@@ -102,7 +102,7 @@ class MatchesScreen extends ConsumerWidget {
                     const SizedBox(height: 16),
                     Text(
                       'Revisa el perfil de la contraparte y confirma el viaje antes de que se llene o cambien los planes.',
-                      style: GoogleFonts.inter(color: Colors.black54, fontSize: 14, height: 1.3),
+                      style: AppTheme.bodyFont(color: Colors.black54, fontSize: 14, height: 1.3),
                     ),
                     const SizedBox(height: 20),
                     SizedBox(
@@ -189,16 +189,36 @@ class _MatchDetailBottomSheetState extends ConsumerState<_MatchDetailBottomSheet
 
   Future<void> _acceptMatch() async {
     if (trip == null) return;
-    
+
     final appState = ref.read(appStateProvider);
-    final isDriverAction = !trip!.isOffer;
-    final canCreate = ref.read(appStateProvider.notifier).canTransact(isDriverAction: isDriverAction);
-    
-    if (!canCreate && isDriverAction) {
-       context.push('/subscription');
-       return;
+
+    // Aceptar una demanda implica conducir: exige identidad validada.
+    if (!trip!.isOffer && !appState.isVerified) {
+      final goVerify = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Identidad no validada'),
+          content: const Text(
+              'Para llevar pasajeros como conductor, necesitas validar tu identidad por seguridad.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Validar Identidad'),
+            ),
+          ],
+        ),
+      );
+      if (goVerify == true && mounted) {
+        context.pop(); // cerrar el detalle de la coincidencia
+        context.push('/verify');
+      }
+      return;
     }
-    
+
     setState(() => isAccepting = true);
     
     try {
@@ -265,7 +285,7 @@ class _MatchDetailBottomSheetState extends ConsumerState<_MatchDetailBottomSheet
           else if (trip == null)
             Padding(
               padding: const EdgeInsets.all(32.0),
-              child: Text('El viaje ya no está disponible.', style: GoogleFonts.inter(color: Colors.black54)),
+              child: Text('El viaje ya no está disponible.', style: AppTheme.bodyFont(color: Colors.black54)),
             )
           else
             Padding(

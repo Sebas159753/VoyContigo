@@ -10,17 +10,23 @@ class TripRepository {
     await _firestore.collection('trips').doc(tripId).set(tripData);
   }
 
-  Future<void> addTrip(Map<String, dynamic> tripData) async {
-    await _firestore.collection('trips').add(tripData);
+  /// Crea un viaje y devuelve su id.
+  Future<String> addTrip(Map<String, dynamic> tripData) async {
+    final ref = await _firestore.collection('trips').add(tripData);
+    return ref.id;
   }
 
-  Future<void> addTripsBatch(List<Map<String, dynamic>> tripsData) async {
+  /// Crea varios viajes (serie recurrente) y devuelve la lista de ids creados.
+  Future<List<String>> addTripsBatch(List<Map<String, dynamic>> tripsData) async {
     final batch = _firestore.batch();
+    final ids = <String>[];
     for (var trip in tripsData) {
       final docRef = _firestore.collection('trips').doc();
+      ids.add(docRef.id);
       batch.set(docRef, trip);
     }
     await batch.commit();
+    return ids;
   }
 
   Future<void> updateTripData(String tripId, Map<String, dynamic> tripData) async {
@@ -29,6 +35,51 @@ class TripRepository {
 
   Future<void> updateTripStatus(String tripId, String status) async {
     await _firestore.collection('trips').doc(tripId).update({'status': status});
+  }
+
+  /// Cancela un viaje (pasa a CANCELLED y así va al historial).
+  Future<void> cancelTrip(String tripId) async {
+    await _firestore.collection('trips').doc(tripId).update({'status': 'CANCELLED'});
+  }
+
+  /// Cancela toda una serie recurrente creada por [creatorUid].
+  /// Solo cancela las ocurrencias aún PENDIENTES (no toca viajes ya aceptados).
+  /// Devuelve cuántas ocurrencias se cancelaron.
+  Future<int> cancelSeries(String recurringGroupId, String creatorUid) async {
+    // Consulta por un solo campo para no requerir índice compuesto.
+    final query = await _firestore
+        .collection('trips')
+        .where('recurringGroupId', isEqualTo: recurringGroupId)
+        .get();
+
+    final batch = _firestore.batch();
+    int count = 0;
+    for (final doc in query.docs) {
+      final data = doc.data();
+      if ((data['creatorUid'] ?? '') != creatorUid) continue;
+      if ((data['status'] ?? 'PENDING') == 'PENDING') {
+        batch.update(doc.reference, {'status': 'CANCELLED'});
+        count++;
+      }
+    }
+    if (count > 0) await batch.commit();
+    return count;
+  }
+
+  /// IDs (Firestore doc ids) de las ocurrencias PENDIENTES de una serie
+  /// creadas por [creatorUid] — útil para cancelar recordatorios locales.
+  Future<List<String>> pendingSeriesTripIds(
+      String recurringGroupId, String creatorUid) async {
+    final query = await _firestore
+        .collection('trips')
+        .where('recurringGroupId', isEqualTo: recurringGroupId)
+        .get();
+    return query.docs
+        .where((d) =>
+            (d.data()['creatorUid'] ?? '') == creatorUid &&
+            (d.data()['status'] ?? 'PENDING') == 'PENDING')
+        .map((d) => d.id)
+        .toList();
   }
 
   Future<void> joinTripAsPassenger({
@@ -126,6 +177,9 @@ class TripRepository {
     });
   }
 
+  /// Marca el viaje como COMPLETED. El incremento de `completedTrips` de los
+  /// participantes lo hace la Cloud Function `onTripUpdated`: las reglas de
+  /// Firestore no permiten que un cliente toque contadores de otros usuarios.
   Future<void> completeTrip(String tripId) async {
     await _firestore.runTransaction((transaction) async {
       final docRef = _firestore.collection('trips').doc(tripId);
@@ -142,34 +196,7 @@ class TripRepository {
         return; // Ya completado
       }
 
-      // 1. Marcar el viaje como completado
       transaction.update(docRef, {'status': 'COMPLETED'});
-
-      // 2. Obtener los participantes
-      final String creatorUid = data['creatorUid'] ?? '';
-      final String? acceptedByUid = data['acceptedByUid'];
-      final List<dynamic>? passengerUids = data['passengerUids'];
-
-      final Set<String> participantUids = {};
-      if (creatorUid.isNotEmpty) participantUids.add(creatorUid);
-      if (acceptedByUid != null && acceptedByUid.isNotEmpty) {
-        participantUids.add(acceptedByUid);
-      }
-      if (passengerUids != null) {
-        for (var uid in passengerUids) {
-          if (uid is String && uid.isNotEmpty) {
-            participantUids.add(uid);
-          }
-        }
-      }
-
-      // 3. Incrementar completedTrips para cada participante
-      for (var uid in participantUids) {
-        final userRef = _firestore.collection('users').doc(uid);
-        transaction.update(userRef, {
-          'completedTrips': FieldValue.increment(1),
-        });
-      }
     });
   }
 }

@@ -1,4 +1,5 @@
-const functions = require("firebase-functions");
+// API v1 explícita: desde firebase-functions v5+ el import raíz expone la v2.
+const functions = require("firebase-functions/v1");
 const admin = require("firebase-admin");
 const geofire = require("geofire-common");
 
@@ -279,39 +280,49 @@ exports.onTripUpdated = functions.firestore
                 }
             }
         } else if (afterData.status === "CANCELLED" && beforeData.status !== "CANCELLED") {
-            if (beforeData.status === "ACCEPTED" && afterData.acceptedByUid) {
-                const uidsToNotify = [afterData.creatorUid];
-                if (afterData.acceptedByUid) uidsToNotify.push(afterData.acceptedByUid);
-                for (const uid of uidsToNotify) {
-                    const userDoc = await admin.firestore().collection("users").doc(uid).get();
-                    const fcmToken = userDoc.exists ? userDoc.data().fcmToken : null;
-                    if (fcmToken) {
-                        const message = {
-                            token: fcmToken,
-                            notification: {
-                                title: "Viaje Cancelado ⚠️",
-                                body: "Uno de tus viajes programados ha sido cancelado.",
-                            },
-                            data: { type: "trip_cancelled", tripId: tripId },
-                            android: {
-                              priority: "high",
-                              notification: {
-                                channelId: "voycontigo_matches"
-                              }
-                            }
-                        };
-                        try {
-                            await admin.messaging().send(message);
-                            console.log("Cancelled notification sent to", uid);
-                        } catch (e) {
-                            console.error("Error sending notification:", e);
+            const uidsToNotify = [];
+            
+            if (afterData.acceptedByUid) {
+                uidsToNotify.push(afterData.acceptedByUid);
+            }
+            
+            if (afterData.passengerUids && afterData.passengerUids.length > 0) {
+                uidsToNotify.push(...afterData.passengerUids);
+            }
+
+            for (const uid of uidsToNotify) {
+                const userDoc = await admin.firestore().collection("users").doc(uid).get();
+                const fcmToken = userDoc.exists ? userDoc.data().fcmToken : null;
+                if (fcmToken) {
+                    const message = {
+                        token: fcmToken,
+                        notification: {
+                            title: "Viaje Cancelado ⚠️",
+                            body: "El creador del viaje lo ha cancelado.",
+                        },
+                        data: { type: "trip_cancelled", tripId: tripId },
+                        android: {
+                          priority: "high",
+                          notification: {
+                            channelId: "voycontigo_matches"
+                          }
                         }
+                    };
+                    try {
+                        await admin.messaging().send(message);
+                        console.log("Cancelled notification sent to", uid);
+                    } catch (e) {
+                        console.error("Error sending notification:", e);
                     }
                 }
             }
         } else if (afterData.status === "COMPLETED" && beforeData.status !== "COMPLETED") {
             const db = admin.firestore();
             const uidsToUpdate = [afterData.creatorUid];
+            // El conductor que aceptó una demanda también completa el viaje.
+            if (afterData.acceptedByUid) {
+                uidsToUpdate.push(afterData.acceptedByUid);
+            }
             if (afterData.passengerUids && afterData.passengerUids.length > 0) {
                 uidsToUpdate.push(...afterData.passengerUids);
             }
@@ -366,146 +377,60 @@ exports.onTripUpdated = functions.firestore
         return null;
     });
 
-const stripe = require("stripe")("sk_test_51Rg5GuDE9BzKscrP29ObWtDSE8qghsItfyoSF21xVUXUpfzgolCqR6QEokwaWRS0WT2qIdsrc3Yq8RVXdhT3oeTx00pffwoetj");
+exports.onChatMessage = functions.firestore
+    .document("trips/{tripId}/chat_messages/{messageId}")
+    .onCreate(async (snap, context) => {
+        const messageData = snap.data();
+        const tripId = context.params.tripId;
+        
+        // Fetch trip to know who is involved
+        const tripDoc = await admin.firestore().collection("trips").doc(tripId).get();
+        if (!tripDoc.exists) return null;
+        const trip = tripDoc.data();
+        
+        // Notify all participants except the sender
+        const senderName = messageData.senderName || "Alguien";
+        const senderUid = messageData.senderUid || null;
+        const allParticipants = [trip.creatorUid];
+        if (trip.acceptedByUid) allParticipants.push(trip.acceptedByUid);
+        if (trip.passengers) {
+            trip.passengers.forEach(p => allParticipants.push(p.uid));
+        }
+        
+        const uniqueParticipants = [...new Set(allParticipants)];
+        
+        for (const uid of uniqueParticipants) {
+            if (!uid) continue;
+            const userDoc = await admin.firestore().collection("users").doc(uid).get();
+            if (!userDoc.exists) continue;
+            
+            const userData = userDoc.data();
+            // No notificar al propio remitente (identidad por UID).
+            if (uid === senderUid) continue;
 
-exports.createSubscription = functions.https.onRequest(async (req, res) => {
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "GET, POST");
-
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-
-  try {
-    const { uid, email } = req.body;
-    if (!uid || !email) {
-      res.status(400).send({ error: "Falta uid o email" });
-      return;
-    }
-
-    const customer = await stripe.customers.create({
-      email: email,
-      metadata: { uid: uid },
+            const fcmToken = userData.fcmToken;
+            if (fcmToken) {
+                const payload = {
+                    token: fcmToken,
+                    notification: {
+                        title: `Nuevo mensaje de ${senderName}`,
+                        body: messageData.text || "Ha enviado un mensaje",
+                    },
+                    data: { type: "chat_message", tripId: tripId },
+                    android: {
+                      priority: "high",
+                      notification: {
+                        channelId: "voycontigo_matches"
+                      }
+                    }
+                };
+                
+                try {
+                    await admin.messaging().send(payload);
+                } catch (e) {
+                    console.error("Error sending chat notification:", e);
+                }
+            }
+        }
+        return null;
     });
-
-    const ephemeralKey = await stripe.ephemeralKeys.create(
-      { customer: customer.id },
-      { apiVersion: "2023-10-16" } 
-    );
-
-    // Create a PaymentIntent instead of a Subscription to force client_secret generation
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: 999,
-      currency: 'usd',
-      customer: customer.id,
-      setup_future_usage: 'off_session',
-      automatic_payment_methods: { enabled: true },
-    });
-
-    res.json({
-      subscriptionId: paymentIntent.id,
-      clientSecret: paymentIntent.client_secret,
-      ephemeralKey: ephemeralKey.secret,
-      customer: customer.id,
-    });
-  } catch (error) {
-    console.error("Error creating subscription:", error);
-    res.status(500).send({ error: error.message });
-  }
-});
-
-exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
-  const sig = req.headers["stripe-signature"];
-  const endpointSecret = "whsec_IlrESoiKlYEKn7G92cm6x7XyDKDkuvww";
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
-  } catch (err) {
-    console.error("Webhook Error:", err.message);
-    res.status(400).send(`Webhook Error: ${err.message}`);
-    return;
-  }
-
-  if (event.type === 'payment_intent.succeeded') {
-    const paymentIntent = event.data.object;
-    
-    // Set default payment method and create real subscription
-    if (paymentIntent.customer) {
-      if (paymentIntent.payment_method) {
-        await stripe.customers.update(paymentIntent.customer, {
-          invoice_settings: { default_payment_method: paymentIntent.payment_method },
-        });
-      }
-
-      const sub = await stripe.subscriptions.create({
-        customer: paymentIntent.customer,
-        items: [{ price: 'price_1TiKYZDE9BzKscrPPk3Tjbgh' }],
-        trial_period_days: 30, // We already charged them for the first month via PaymentIntent
-      });
-
-      const customerObj = await stripe.customers.retrieve(paymentIntent.customer);
-      const uid = customerObj.metadata.uid;
-      if (uid) {
-        const db = admin.firestore();
-        await db.collection("users").doc(uid).update({
-          isSubscribed: true,
-          stripeSubscriptionId: sub.id, 
-        });
-      }
-    }
-  } else if (event.type === "invoice.payment_succeeded") {
-    const invoice = event.data.object;
-    if (invoice.subscription && invoice.amount_paid > 0) {
-      const customer = await stripe.customers.retrieve(invoice.customer);
-      const uid = customer.metadata.uid;
-      if (uid) {
-        await admin.firestore().collection("users").doc(uid).update({
-          isSubscribed: true,
-          stripeSubscriptionId: invoice.subscription,
-        });
-      }
-    }
-  } else if (event.type === "customer.subscription.deleted" || event.type === "invoice.payment_failed") {
-    const obj = event.data.object;
-    const customer = await stripe.customers.retrieve(obj.customer);
-    const uid = customer.metadata.uid;
-    if (uid) {
-      await admin.firestore().collection("users").doc(uid).update({
-        isSubscribed: false,
-      });
-    }
-  }
-
-  res.json({ received: true });
-});
-
-exports.cancelSubscription = functions.https.onRequest(async (req, res) => {
-  const { uid } = req.body;
-  if (!uid) {
-    return res.status(400).send({ error: "Missing uid" });
-  }
-
-  try {
-    const userDoc = await admin.firestore().collection("users").doc(uid).get();
-    if (!userDoc.exists) {
-      return res.status(404).send({ error: "User not found" });
-    }
-
-    const subId = userDoc.data().stripeSubscriptionId;
-    if (subId && subId.startsWith('sub_')) {
-      await stripe.subscriptions.cancel(subId);
-    }
-
-    await admin.firestore().collection("users").doc(uid).update({
-      isSubscribed: false,
-      stripeSubscriptionId: admin.firestore.FieldValue.delete(),
-    });
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error cancelling subscription:", error);
-    res.status(500).send({ error: error.message });
-  }
-});

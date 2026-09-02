@@ -1,83 +1,127 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Función auxiliar: Verifica si el usuario está logueado
+
     function isAuthenticated() {
       return request.auth != null;
     }
 
+    function isSignedInAs(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // Campos que el cliente NUNCA debe modificar por su cuenta (finanzas/rol).
+    function noProtectedFieldsChanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['isPremium', 'freeUses', 'isSubscribed', 'completedTrips', 'stripeSubscriptionId', 'role']);
+    }
+
     // 1. Usuarios
     match /users/{userId} {
-      // Cualquiera autenticado puede leer para ver nombres y perfiles
+      // NOTA (post-MVP): el doc de usuario expone fcmToken/teléfono a cualquier
+      // autenticado. Para cerrarlo del todo hay que separar un perfil público
+      // (solo nombre/rating) del privado. Se difiere para no romper el rating.
       allow read: if isAuthenticated();
-      // Solo el propio usuario puede crear su documento
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      // El propio usuario puede actualizar pero NO sus finanzas. Otros solo pueden actualizar su rating.
+
+      // Crear tu propio doc, sin auto-otorgarte premium/suscripción/rol.
+      allow create: if isSignedInAs(userId)
+        && !request.resource.data.keys().hasAny(['isPremium', 'isSubscribed', 'stripeSubscriptionId'])
+        && (!('role' in request.resource.data.keys()) || request.resource.data.role == 'USER');
+
+      // El dueño actualiza (sin tocar finanzas/rol) O cualquiera solo el rating.
       allow update: if isAuthenticated() && (
-        (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPremium', 'freeUses', 'isSubscribed', 'completedTrips'])) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'totalRatings']) 
-         && request.resource.data.rating is number 
-         && request.resource.data.rating >= 1.0 
-         && request.resource.data.rating <= 5.0)
+        (request.auth.uid == userId && noProtectedFieldsChanged()) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'totalRatings'])
+          && request.resource.data.rating is number
+          && request.resource.data.rating >= 1.0
+          && request.resource.data.rating <= 5.0)
       );
-      allow delete: if false; // No permitimos borrar cuentas directamente por ahora
+
+      allow delete: if false;
     }
 
     // 2. Viajes (Trips)
     match /trips/{tripId} {
-      // Solo autenticados pueden ver los viajes
       allow read: if isAuthenticated();
-      
-      // Solo autenticados pueden crear, y el creatorUid debe ser el suyo. Precio debe ser >= 0
-      allow create: if isAuthenticated() && 
-                    request.resource.data.creatorUid == request.auth.uid &&
-                    request.resource.data.price is number &&
-                    request.resource.data.price >= 0;
-      
-      // Actualización
+
+      // Crear: el creador eres tú, precio válido, estado inicial PENDING,
+      // isOffer booleano y sin pre-asignar un aceptante.
+      allow create: if isAuthenticated()
+        && request.resource.data.creatorUid == request.auth.uid
+        && request.resource.data.price is number
+        && request.resource.data.price >= 0
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.isOffer is bool
+        && request.resource.data.acceptedByUid == null;
+
       allow update: if isAuthenticated() && (
-        // El creador original puede modificarlo
-        resource.data.creatorUid == request.auth.uid ||
-        // O un tercero puede actualizarlo SOLO para aceptarlo
-        (request.resource.data.status == 'ACCEPTED' && request.resource.data.acceptedByUid == request.auth.uid) ||
-        // O un tercero puede actualizarlo SOLO para cancelarlo si es participante
-        (request.resource.data.status == 'CANCELLED' && (resource.data.acceptedByUid == request.auth.uid || resource.data.creatorUid == request.auth.uid)) ||
-        // O un pasajero puede unirse/cancelar su cupo, pero solo modificando su propia membresía
-        (resource.data.isOffer == true && 
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['passengers', 'passengerUids', 'availableSeats', 'status']) &&
-         (
-           (request.auth.uid in request.resource.data.passengerUids && !(request.auth.uid in resource.data.passengerUids)) ||
-           (!(request.auth.uid in request.resource.data.passengerUids) && request.auth.uid in resource.data.passengerUids)
-         )
-        )
+        // (a) El creador edita su propio viaje, sin cambiar de dueño.
+        (resource.data.creatorUid == request.auth.uid
+          && request.resource.data.creatorUid == resource.data.creatorUid) ||
+
+        // (b) Un TERCERO acepta un viaje PENDIENTE y libre — solo eso.
+        (resource.data.status == 'PENDING'
+          && resource.data.acceptedByUid == null
+          && request.resource.data.status == 'ACCEPTED'
+          && request.resource.data.acceptedByUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'acceptedByUid', 'acceptedByName'])) ||
+
+        // (c) Un participante CANCELA — solo cambia el estado.
+        (request.resource.data.status == 'CANCELLED'
+          && (resource.data.acceptedByUid == request.auth.uid || resource.data.creatorUid == request.auth.uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+
+        // (c2) El conductor ACEPTANTE de una demanda inicia o finaliza el
+        //      viaje — solo cambia el estado. (El creador ya puede por (a).)
+        (request.resource.data.status in ['EN_ROUTE', 'COMPLETED']
+          && resource.data.acceptedByUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+
+        // (d) Un pasajero se une/sale de una OFERTA — solo su membresía y nunca
+        //     puede marcarla como COMPLETED (evita el farmeo de "viajes completados").
+        (resource.data.isOffer == true
+          && request.resource.data.status in ['PENDING', 'FULL']
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['passengers', 'passengerUids', 'availableSeats', 'status'])
+          && (
+            (request.auth.uid in request.resource.data.passengerUids && !(request.auth.uid in resource.data.passengerUids)) ||
+            (!(request.auth.uid in request.resource.data.passengerUids) && request.auth.uid in resource.data.passengerUids)
+          ))
       );
-      
+
       allow delete: if isAuthenticated() && resource.data.creatorUid == request.auth.uid;
 
       // 3. Sub-colección de Mensajes de Chat
       match /chat_messages/{messageId} {
-        // Solo pueden leer y escribir si son el creador o quien aceptó el viaje
-        allow read, write: if isAuthenticated() && (
-          get(/databases/$(database)/documents/trips/$(tripId)).data.creatorUid == request.auth.uid ||
-          get(/databases/$(database)/documents/trips/$(tripId)).data.acceptedByUid == request.auth.uid
-        );
+        function isTripParticipant() {
+          let trip = get(/databases/$(database)/documents/trips/$(tripId)).data;
+          return isAuthenticated() && (
+            trip.creatorUid == request.auth.uid ||
+            trip.acceptedByUid == request.auth.uid ||
+            (request.auth.uid in trip.passengerUids)
+          );
+        }
+        allow read: if isTripParticipant();
+        // Solo CREAR (no editar/borrar) y el remitente debe ser uno mismo.
+        allow create: if isTripParticipant()
+          && request.resource.data.senderUid == request.auth.uid;
+        allow update, delete: if false;
       }
     }
 
     // 4. Coincidencias (Matches)
     match /matches/{matchId} {
-      // Solo pueden leer los involucrados
       allow read: if isAuthenticated() && (
-        resource.data.offerUserId == request.auth.uid || 
+        resource.data.offerUserId == request.auth.uid ||
         resource.data.demandUserId == request.auth.uid
       );
-      // Funciones pueden crear. Clientes pueden actualizar a ACCEPTED.
+      // Solo las Cloud Functions crean/borran. El cliente solo pasa a ACCEPTED.
       allow create, delete: if false;
-      allow update: if isAuthenticated() && 
-        (resource.data.offerUserId == request.auth.uid || resource.data.demandUserId == request.auth.uid) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
-        request.resource.data.status == 'ACCEPTED';
+      allow update: if isAuthenticated()
+        && (resource.data.offerUserId == request.auth.uid || resource.data.demandUserId == request.auth.uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'ACCEPTED';
     }
   }
 }
