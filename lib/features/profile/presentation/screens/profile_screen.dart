@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:voycontigo/core/theme/app_theme.dart';
 import 'package:voycontigo/features/trips/presentation/providers/trip_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:voycontigo/core/config/app_config.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -54,13 +54,13 @@ class ProfileScreen extends ConsumerWidget {
                 Text(
                   appState.userName,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5),
+                  style: AppTheme.titleFont(fontSize: 26, color: Colors.white, letterSpacing: -0.3),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   appState.userEmail,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(color: Colors.white.withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.w500),
+                  style: AppTheme.bodyFont(color: Colors.white.withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -81,7 +81,7 @@ class ProfileScreen extends ConsumerWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Plan Actual', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.black, fontSize: 16)),
+                    Text('Plan Actual', style: AppTheme.bodyFont(fontWeight: FontWeight.w700, color: Colors.black, fontSize: 16)),
                     const SizedBox(height: 4),
                     Builder(
                       builder: (context) {
@@ -90,7 +90,7 @@ class ProfileScreen extends ConsumerWidget {
                         String text = appState.isPremium 
                             ? 'Premium (Ilimitado)' 
                             : (remaining > 0 ? 'Gratis ($remaining usos restantes)' : 'Gratis (Usos Agotados)');
-                        return Text(text, style: GoogleFonts.inter(color: Colors.black54, fontSize: 14));
+                        return Text(text, style: AppTheme.bodyFont(color: Colors.black54, fontSize: 14));
                       }
                     ),
                   ],
@@ -100,64 +100,16 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 32),
-          if (!appState.isSubscribed)
-            _buildListTile(Icons.workspace_premium, 'Mejorar a Premium', () {
-              context.push('/subscription');
-            })
-          else
-            _buildListTile(Icons.cancel, 'Cancelar Suscripción', () {
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Cancelar Suscripción'),
-                  content: const Text('¿Estás seguro de que quieres cancelar tu suscripción Premium?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('No, mantener', style: TextStyle(color: Colors.black54)),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        Navigator.pop(ctx);
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (c) => const Center(child: CircularProgressIndicator()),
-                        );
-                        
-                        try {
-                          final uid = ref.read(appStateProvider).uid;
-                          final httpsCallable = FirebaseFunctions.instance.httpsCallable('cancelSubscription');
-                          final result = await httpsCallable.call({'uid': uid});
-                          
-                          if (context.mounted) {
-                            Navigator.pop(context); // close loader
-                            if (result.data['success'] == true) {
-                              ref.read(appStateProvider.notifier).cancelSubscription();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Suscripción cancelada exitosamente')),
-                              );
-                            }
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            Navigator.pop(context); // close loader
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error al cancelar: $e')),
-                            );
-                          }
-                        }
-                      },
-                      child: const Text('Sí, cancelar', style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                ),
-              );
-            }),
           ],
           _buildListTile(Icons.swap_horiz, 'Cambiar de Rol', () {
             context.go('/role');
           }),
+          if (appState.role == 'ADMIN') ...[
+            const Divider(),
+            _buildListTile(Icons.admin_panel_settings, 'Panel de Administración', () {
+              context.push('/admin');
+            }),
+          ],
           _buildListTile(Icons.medical_services_outlined, 'Contacto de Emergencia', () {
             _showEmergencyContactModal(context, ref, appState.emergencyPhone);
           }),
@@ -176,22 +128,34 @@ class ProfileScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('Centro de Soporte', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
+                    Text('Centro de Soporte', style: AppTheme.bodyFont(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
                     const SizedBox(height: 16),
-                    Text('¿Necesitas ayuda con un viaje o tu cuenta?', style: GoogleFonts.inter(color: Colors.black54), textAlign: TextAlign.center),
+                    Text('¿Necesitas ayuda con un viaje o tu cuenta?', style: AppTheme.bodyFont(color: Colors.black54), textAlign: TextAlign.center),
                     const SizedBox(height: 24),
                     ListTile(
                       leading: const Icon(Icons.email_outlined, color: Colors.black),
-                      title: Text('ayuda@voycontigo.app', style: GoogleFonts.inter(color: Colors.black87, fontWeight: FontWeight.w600)),
-                      onTap: () {
+                      title: Text('ayuda@voycontigo.app', style: AppTheme.bodyFont(color: Colors.black87, fontWeight: FontWeight.w600)),
+                      subtitle: Text('Escríbenos y te respondemos lo antes posible', style: AppTheme.bodyFont(color: Colors.black45, fontSize: 12)),
+                      onTap: () async {
+                        final messenger = ScaffoldMessenger.of(context);
                         context.pop();
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Abriendo correo...')));
+                        final mailUri = Uri(
+                          scheme: 'mailto',
+                          path: 'ayuda@voycontigo.app',
+                          query: 'subject=Soporte VoyContigo',
+                        );
+                        bool opened = false;
+                        try {
+                          opened = await launchUrl(mailUri);
+                        } catch (_) {
+                          opened = false;
+                        }
+                        if (!opened) {
+                          messenger.showSnackBar(const SnackBar(
+                            content: Text('No se encontró una app de correo. Escríbenos a ayuda@voycontigo.app'),
+                          ));
+                        }
                       },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.chat_bubble_outline, color: Colors.black),
-                      title: Text('Chat en vivo (Próximamente)', style: GoogleFonts.inter(color: Colors.black87, fontWeight: FontWeight.w600)),
-                      onTap: () => context.pop(),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -244,7 +208,7 @@ class ProfileScreen extends ConsumerWidget {
           ),
           child: Icon(icon, color: iconColor, size: 22),
         ),
-        title: Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: textColor, fontSize: 15)),
+        title: Text(title, style: AppTheme.bodyFont(fontWeight: FontWeight.w600, color: textColor, fontSize: 15)),
         trailing: const Icon(Icons.chevron_right, color: Colors.black26),
         onTap: onTap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -271,9 +235,9 @@ class ProfileScreen extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Contacto de Emergencia', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black), textAlign: TextAlign.center),
+            Text('Contacto de Emergencia', style: AppTheme.bodyFont(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black), textAlign: TextAlign.center),
             const SizedBox(height: 8),
-            Text('Este número recibirá un mensaje de texto con tu ubicación si presionas el botón SOS durante un viaje.', style: GoogleFonts.inter(color: Colors.black54), textAlign: TextAlign.center),
+            Text('Este número recibirá un mensaje de texto con tu ubicación si presionas el botón SOS durante un viaje.', style: AppTheme.bodyFont(color: Colors.black54), textAlign: TextAlign.center),
             const SizedBox(height: 24),
             TextField(
               controller: controller,
@@ -299,7 +263,7 @@ class ProfileScreen extends ConsumerWidget {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contacto de emergencia actualizado')));
                 }
               },
-              child: Text('Guardar', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: Text('Guardar', style: AppTheme.bodyFont(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 24),
           ],
