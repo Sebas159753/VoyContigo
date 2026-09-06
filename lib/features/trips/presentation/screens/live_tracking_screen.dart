@@ -13,6 +13,7 @@ import 'package:voycontigo/features/trips/data/trip_repository.dart';
 import 'package:voycontigo/features/trips/domain/models/trip.dart';
 import 'package:voycontigo/features/trips/presentation/widgets/rating_dialog.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
+import 'package:voycontigo/core/utils/date_format.dart';
 
 class LiveTrackingScreen extends ConsumerStatefulWidget {
   final String tripId;
@@ -296,8 +297,14 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
         final currentLat = trip.currentLat;
         final currentLng = trip.currentLng;
 
+        // Antes de EN_ROUTE la pantalla es una "antesala": muestra el punto
+        // de encuentro y la cuenta regresiva, no ubicación en vivo.
+        final bool isEnRoute = trip.status == 'EN_ROUTE';
+
         LatLng initialCenter = const LatLng(-0.510368, -78.568390); // Machachi default
-        if (currentLat != null && currentLng != null) {
+        if (!isEnRoute && trip.originLat != null && trip.originLng != null) {
+          initialCenter = LatLng(trip.originLat!, trip.originLng!);
+        } else if (currentLat != null && currentLng != null) {
           initialCenter = LatLng(currentLat, currentLng);
         }
 
@@ -411,7 +418,8 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text('Seguimiento en Vivo', style: AppTheme.bodyFont(letterSpacing: -0.5)),
+            title: Text(isEnRoute ? 'Seguimiento en Vivo' : 'Detalle del Viaje',
+                style: AppTheme.bodyFont(letterSpacing: -0.5)),
             backgroundColor: Colors.white,
             actions: [
               IconButton(
@@ -505,9 +513,115 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                         ),
                       ],
                     ),
+                  // Antesala: pin fijo del punto de encuentro acordado.
+                  if (!isEnRoute && trip.originLat != null && trip.originLng != null)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(trip.originLat!, trip.originLng!),
+                          width: 46,
+                          height: 46,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: AppTheme.purpleDarkest,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6)],
+                            ),
+                            child: const Icon(Icons.location_on, color: Colors.white, size: 24),
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
-              if (!isDriver && (currentLat == null || currentLng == null))
+              // Antesala (viaje aún no iniciado): resumen y cuenta regresiva,
+              // en vez de pedir una ubicación que todavía no existe.
+              if (!isEnRoute)
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 10)],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.check_circle_rounded,
+                                color: AppTheme.successGreen, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                trip.status == 'PENDING'
+                                    ? 'Viaje publicado'
+                                    : 'Viaje confirmado',
+                                style: AppTheme.bodyFont(
+                                    fontWeight: FontWeight.w800, fontSize: 15),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.purpleLightest,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                VoyDate.relativeDeparture(trip.scheduleTime),
+                                style: AppTheme.subtitleFont(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.purpleDarkest,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${VoyDate.dayLong(trip.scheduleTime)} · ${VoyDate.time(trip.scheduleTime)}',
+                          style: AppTheme.bodyFont(
+                              fontSize: 12, color: AppTheme.inkMuted),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on,
+                                size: 14, color: AppTheme.purpleDark),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Punto de encuentro: ${trip.exactPickup}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTheme.bodyFont(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.ink),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          isDriver
+                              ? 'Cuando salgas, toca "Iniciar Viaje" para compartir tu ubicación en vivo.'
+                              : 'El mapa en vivo se activará cuando el conductor inicie el viaje 🚗',
+                          style: AppTheme.bodyFont(
+                              fontSize: 12, color: AppTheme.inkMuted, height: 1.3),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (!isDriver && (currentLat == null || currentLng == null))
                 Positioned(
                   top: 20,
                   left: 20,
