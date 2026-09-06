@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'firebase_options.dart';
 import 'package:voycontigo/core/router/app_router.dart';
 import 'package:voycontigo/core/theme/app_theme.dart';
@@ -16,6 +18,16 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Crashlytics: reporta automáticamente todo error no capturado.
+  // En debug no envía nada (para no ensuciar el panel con desarrollo).
+  if (!kDebugMode) {
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+  }
 
   // Configurar persistencia offline
   FirebaseFirestore.instance.settings = const Settings(
