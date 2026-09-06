@@ -28,6 +28,9 @@ class AppState {
   final String role;
   final bool notificationsEnabled;
 
+  /// NONE | PENDING_REVIEW | APPROVED | REJECTED — solo el admin aprueba.
+  final String verificationStatus;
+
   AppState({
     required this.freeUses, 
     this.isPremium = false,
@@ -44,6 +47,7 @@ class AppState {
     this.redeemedRewards = const [],
     this.role = 'USER',
     this.notificationsEnabled = true,
+    this.verificationStatus = 'NONE',
   });
 
   AppState copyWith({
@@ -62,6 +66,7 @@ class AppState {
     List<String>? redeemedRewards,
     String? role,
     bool? notificationsEnabled,
+    String? verificationStatus,
   }) {
     return AppState(
       freeUses: freeUses ?? this.freeUses,
@@ -79,6 +84,7 @@ class AppState {
       redeemedRewards: redeemedRewards ?? this.redeemedRewards,
       role: role ?? this.role,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
     );
   }
 }
@@ -182,6 +188,7 @@ class AppNotifier extends StateNotifier<AppState> {
             redeemedRewards: List<String>.from(data['redeemedRewards'] ?? []),
             role: data['role'] ?? state.role,
             notificationsEnabled: data['notificationsEnabled'] ?? true,
+            verificationStatus: data['verificationStatus'] ?? 'NONE',
           );
           NotificationService().setNotificationsEnabled(state.notificationsEnabled);
           _notifyNewRewards(previousTrips, state.completedTrips);
@@ -250,6 +257,8 @@ class AppNotifier extends StateNotifier<AppState> {
     state = state.copyWith(carModel: carModel, carPlate: carPlate);
   }
 
+  /// Envía la solicitud de verificación a revisión manual. Solo un
+  /// administrador puede aprobarla (poner isVerified en true).
   Future<void> submitVerification({
     required String licenseNumber,
     required String carPlate,
@@ -257,14 +266,14 @@ class AppNotifier extends StateNotifier<AppState> {
   }) async {
     if (state.uid.isNotEmpty) {
       await FirebaseFirestore.instance.collection('users').doc(state.uid).update({
-        'isVerified': true,
+        'verificationStatus': 'PENDING_REVIEW',
         'licenseNumber': licenseNumber,
         'carPlate': carPlate,
         'carModel': carModel,
       });
     }
     state = state.copyWith(
-      isVerified: true,
+      verificationStatus: 'PENDING_REVIEW',
       carPlate: carPlate,
       carModel: carModel,
     );

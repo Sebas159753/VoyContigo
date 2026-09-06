@@ -9,6 +9,7 @@ class AdminPanelScreen extends StatelessWidget {
     try {
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
         'isVerified': true,
+        'verificationStatus': 'APPROVED',
       });
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -26,11 +27,10 @@ class AdminPanelScreen extends StatelessWidget {
 
   Future<void> _rejectUser(BuildContext context, String uid, String name) async {
     try {
-      // For MVP, just clear the car details so they have to submit again
+      // Queda rechazado; el usuario puede corregir sus datos y reenviar.
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
         'isVerified': false,
-        'carModel': FieldValue.delete(),
-        'carPlate': FieldValue.delete(),
+        'verificationStatus': 'REJECTED',
       });
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -58,7 +58,7 @@ class AdminPanelScreen extends StatelessWidget {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('users')
-            .where('isVerified', isEqualTo: false)
+            .where('verificationStatus', isEqualTo: 'PENDING_REVIEW')
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -69,14 +69,7 @@ class AdminPanelScreen extends StatelessWidget {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          final docs = snapshot.data?.docs ?? [];
-          
-          // Filtrar localmente los que tengan modelo de carro, indicando que enviaron solicitud
-          final pendingUsers = docs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final carModel = data['carModel'] as String?;
-            return carModel != null && carModel.isNotEmpty;
-          }).toList();
+          final pendingUsers = snapshot.data?.docs ?? [];
 
           if (pendingUsers.isEmpty) {
             return Center(
@@ -119,8 +112,9 @@ class AdminPanelScreen extends StatelessWidget {
                         children: [
                           Text('Detalles del Vehículo', style: AppTheme.bodyFont(fontWeight: FontWeight.w600, fontSize: 14)),
                           const SizedBox(height: 4),
-                          Text('Modelo: ${userData['carModel']}', style: AppTheme.bodyFont(fontSize: 14)),
-                          Text('Placa: ${userData['carPlate']}', style: AppTheme.bodyFont(fontSize: 14)),
+                          Text('Modelo: ${userData['carModel'] ?? '—'}', style: AppTheme.bodyFont(fontSize: 14)),
+                          Text('Placa: ${userData['carPlate'] ?? '—'}', style: AppTheme.bodyFont(fontSize: 14)),
+                          Text('Licencia: ${userData['licenseNumber'] ?? '—'}', style: AppTheme.bodyFont(fontSize: 14)),
                         ],
                       ),
                     ),

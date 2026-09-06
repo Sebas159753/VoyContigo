@@ -1112,11 +1112,11 @@ class _PublishScreenState extends ConsumerState<PublishScreen> {
                   children: [
                     const Icon(Icons.female, color: Colors.pink),
                     const SizedBox(width: 8),
-                    Text('Solo para Mujeres', style: AppTheme.bodyFont(fontWeight: FontWeight.bold, color: Colors.pink[800])),
+                    Text('Preferencia: solo mujeres', style: AppTheme.bodyFont(fontWeight: FontWeight.bold, color: Colors.pink[800])),
                   ],
                 ),
                 subtitle: Text(
-                  'Este viaje será exclusivo para conductoras y pasajeras mujeres',
+                  'Pides que este viaje sea entre mujeres. La app no verifica el género: es un acuerdo de confianza entre usuarias.',
                   style: AppTheme.bodyFont(fontSize: 12, color: Colors.pink[700]),
                 ),
                 value: _womenOnly,

@@ -271,7 +271,7 @@ class _DynamicTripCardState extends State<DynamicTripCard> {
                               children: [
                                 const Icon(Icons.female, color: Colors.pink, size: 10),
                                 const SizedBox(width: 2),
-                                Text('Solo Mujeres', style: AppTheme.bodyFont(color: Colors.pink, fontSize: 9, fontWeight: FontWeight.bold)),
+                                Text('Solo mujeres · preferencia', style: AppTheme.bodyFont(color: Colors.pink, fontSize: 9, fontWeight: FontWeight.bold)),
                               ],
                             ),
                           ),

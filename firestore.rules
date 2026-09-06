@@ -10,10 +10,18 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == uid;
     }
 
-    // Campos que el cliente NUNCA debe modificar por su cuenta (finanzas/rol).
+    // Administrador: el rol vive en su propio doc de usuario y solo se
+    // asigna desde la consola de Firebase.
+    function isAdmin() {
+      return isAuthenticated()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+
+    // Campos que el cliente NUNCA debe modificar por su cuenta
+    // (finanzas/rol/verificación — esta última la aprueba el admin).
     function noProtectedFieldsChanged() {
       return !request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(['isPremium', 'freeUses', 'isSubscribed', 'completedTrips', 'stripeSubscriptionId', 'role']);
+        .hasAny(['isPremium', 'freeUses', 'isSubscribed', 'completedTrips', 'stripeSubscriptionId', 'role', 'isVerified']);
     }
 
     // 1. Usuarios
@@ -32,13 +40,17 @@ service cloud.firestore {
         && (!('isSubscribed' in request.resource.data.keys()) || request.resource.data.isSubscribed == false)
         && (!('role' in request.resource.data.keys()) || request.resource.data.role == 'USER');
 
-      // El dueño actualiza (sin tocar finanzas/rol) O cualquiera solo el rating.
+      // El dueño actualiza (sin tocar finanzas/rol/verificación),
+      // cualquiera solo el rating, o el ADMIN resuelve verificaciones.
       allow update: if isAuthenticated() && (
         (request.auth.uid == userId && noProtectedFieldsChanged()) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'totalRatings'])
           && request.resource.data.rating is number
           && request.resource.data.rating >= 1.0
-          && request.resource.data.rating <= 5.0)
+          && request.resource.data.rating <= 5.0) ||
+        (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['isVerified', 'verificationStatus', 'carModel', 'carPlate']))
       );
 
       allow delete: if false;

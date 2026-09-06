@@ -54,11 +54,18 @@ class RoleSelectionScreen extends ConsumerWidget {
                 isPassenger: false,
                 onTap: () {
                   final appState = ref.read(appStateProvider);
-                  if (!appState.isVerified) {
-                    context.push('/verify');
-                  } else {
+                  if (appState.isVerified) {
                     ref.read(boardModeProvider.notifier).state = 'conductor';
                     context.push('/tablero');
+                  } else if (appState.verificationStatus == 'PENDING_REVIEW') {
+                    ScaffoldMessenger.of(context)
+                      ..hideCurrentSnackBar()
+                      ..showSnackBar(const SnackBar(
+                        content: Text(
+                            'Tu verificación está en revisión ⏳ Te habilitaremos pronto.'),
+                      ));
+                  } else {
+                    context.push('/verify');
                   }
                 },
               ),

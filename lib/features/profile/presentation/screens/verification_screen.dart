@@ -78,8 +78,10 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('¡Verificación exitosa! Eres un Conductor Verificado.'),
+            content: Text(
+                'Solicitud enviada ✓ Un administrador revisará tus datos y te habilitará como conductor.'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 5),
           ),
         );
         context.go('/role');
